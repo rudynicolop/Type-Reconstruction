@@ -1,38 +1,48 @@
-Require Export Coq.Classes.EquivDec Coq.Lists.List Coq.Bool.Bool.
+Require Export Coq.Classes.EquivDec
+        Coq.Lists.List Coq.Bool.Bool
+        Coq.Logic.FunctionalExtensionality.
 Export ListNotations.
 
 Ltac inv H := inversion H; subst; clear H.
 
+Lemma contrapositive : forall P Q : Prop,
+    (P -> Q) -> ~ Q -> ~ P.
+Proof.
+  intuition.
+Qed.
+
+Lemma nexists_forall_not : forall {A : Type} (P : A -> Prop),
+    ~ (exists x, P x) -> forall x, ~ P x.
+Proof.
+  eauto.
+Qed.
+
+Section Curry.
+  Context {A B C : Type}.
+
+  Definition curry (f : A * B -> C) (a : A) (b : B) : C := f (a,b).
+
+  Definition uncurry (f : A -> B -> C) '((a,b) : A * B) : C := f a b.
+
+  Local Hint Unfold curry : core.
+  Local Hint Unfold uncurry : core.
+
+  Lemma curry_uncurry : forall f ab,
+      uncurry (curry f) ab = f ab.
+  Proof.
+      intros f [a b]; reflexivity.
+  Qed.
+
+  Lemma uncurry_curry : forall f a b,
+      curry (uncurry f) a b = f a b.
+  Proof.
+    reflexivity.
+  Qed.
+End Curry.
+
 Definition reflects
            {A B : Type} (R : A -> B -> Prop) (f: A -> B -> bool) :=
   forall a b, reflect (R a b) (f a b).
-
-Section Env.
-  Context {K V : Set}.
-
-  Definition env : Set := K -> option V.
-
-  Definition empty : env := fun _ => None.
-  
-  Context {HDK : EqDec K eq}.
-
-  Definition bind (k : K) (v : V) (e : env) : env :=
-    fun k' => if equiv_dec k' k then Some v else e k'.
-
-  Definition find (k : K) (e : env) : option V := e k.
-
-  Definition bound (k : K) (v : V) (e : env) : Prop := e k = Some v.
-End Env.
-
-Declare Scope env_scope.
-Delimit Scope env_scope with env.
-
-Notation "'∅'" := empty (at level 0, no associativity) : env_scope.
-Notation "k ↦ v ';;' e"
-  := (bind k v e)
-       (at level 11, right associativity) : env_scope.
-(*Notation "k ↦ v ∈ e"
-  := (bound k v e) (at level 10, no associativity) : env_scope.*)
 
 Declare Scope set_scope.
 Delimit Scope set_scope with set.
@@ -157,3 +167,105 @@ End Sets.
 Notation "l ∪ r" := (l ++ r) : set_scope.
 Notation "l ∩ r" := (intersect l r) : set_scope.
 Notation "l ∖ r" := (difference l r) : set_scope.
+
+Section Env.
+  Context {K V : Set}.
+
+  Definition env : Set := K -> option V.
+
+  Definition empty : env := fun _ => None.
+  
+  Context {HDK : EqDec K eq}.
+
+  Definition bind (k : K) (v : V) (e : env) : env :=
+    fun k' => if equiv_dec k' k then Some v else e k'.
+
+  Lemma bind_sound : forall k v e,
+      (bind k v e) k = Some v.
+  Proof.
+    intros k v e; unfold bind.
+    destruct (equiv_dec k k) as [Hk | Hk];
+      unfold equiv in *; try contradiction.
+    reflexivity.
+  Qed.
+
+  Lemma bind_complete : forall k' k v e,
+      k' <> k -> (bind k v e) k' = e k'.
+  Proof.
+    intros k' k v e Hk'k; unfold bind.
+    destruct (equiv_dec k' k) as [Hk | Hk];
+      unfold equiv in *; try contradiction.
+    reflexivity.
+  Qed.
+
+  Definition find (k : K) (e : env) : option V := e k.
+
+  Definition bound (k : K) (v : V) (e : env) : Prop := e k = Some v.
+
+  Definition mask (e : env) (ks : list K) : env :=
+    fun k => if member k ks then None else e k.
+
+  Definition dom (e : env) (d : list K) : Prop :=
+    forall k, In k d <-> exists v, e k = Some v.
+
+  Lemma env_binds : forall (k : K) (e : env),
+      e k = None \/ exists v, e k = Some v.
+  Proof.
+    intros k e.
+    destruct (e k) eqn:Heq; eauto.
+  Qed.
+  
+  Lemma dom_nil : forall e, dom e [] -> e = empty.
+  Proof.
+    unfold dom. intros e H.
+    extensionality k. unfold empty.
+    specialize H with k.
+    destruct (env_binds k e) as [He | He]; auto.
+    apply H in He. inv He.
+  Qed.
+
+  Lemma not_in_dom : forall k d e,
+      dom e d -> ~ In k d -> e k = None.
+  Proof.
+    intros k d e Hdom HIn; unfold dom in *.
+    specialize Hdom with k.
+    destruct Hdom as [_ Hd].
+    pose proof contrapositive _ _ Hd as H.
+    apply H in HIn.
+    pose proof nexists_forall_not _ HIn as HE.
+    destruct (env_binds k e) as [Hk | [v Hk]]; auto.
+    apply HE in Hk. contradiction.
+  Qed.
+End Env.
+
+Section EnvMap.
+  Context {A B C : Set}.
+  Variable (f : B -> C).
+  Context {HDK : EqDec A eq}.
+
+  Definition env_map (e : @env A B) : @env A C :=
+    fun a => match e a with
+          | Some b => Some (f b)
+          | None => None
+          end.
+
+  Lemma env_map_bind : forall a b e,
+      bind a (f b) (env_map e) = env_map (bind a b e).
+  Proof.
+    intros a b e; extensionality k.
+    unfold bind, env_map.
+    destruct (equiv_dec k a) as [Hka | Hka];
+      unfold equiv in *; subst; reflexivity.
+  Qed.
+End EnvMap.
+
+Declare Scope env_scope.
+Delimit Scope env_scope with env.
+
+Notation "'∅'" := empty (at level 0, no associativity) : env_scope.
+Notation "k ↦ v ';;' e"
+  := (bind k v e)
+       (at level 11, right associativity) : env_scope.
+Notation "e ∉ ks"
+  := (mask e ks)
+       (at level 15, left associativity) : env_scope.
