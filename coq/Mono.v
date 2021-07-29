@@ -1,123 +1,12 @@
 Require Export Coq.Strings.String
-        Coq.Arith.PeanoNat CoqRecon.Env
-        Coq.funind.Recdef CoqRecon.Maybe
+        Coq.Arith.PeanoNat Coq.funind.Recdef
+        CoqRecon.Maybe CoqRecon.Typ
         Coq.micromega.Lia.
 
 Instance StringEqDec : EqDec string eq := {equiv_dec := string_dec}.
 Instance NatEqDec
   : @EqDec nat (@eq nat) (@eq_equivalence nat) :=
   {equiv_dec := Nat.eq_dec}.
-
-Inductive typ : Set :=
-| TBool
-| TNat
-| TArrow : typ -> typ -> typ
-| TVar : nat -> typ.
-
-Declare Scope typ_scope.
-Delimit Scope typ_scope with typ.
-
-Notation "t1 → t2"
-  := (TArrow t1 t2)
-       (at level 30, right associativity) : typ_scope.
-
-Fixpoint typ_size (t : typ) : nat :=
-match t with
-| TBool | TNat | TVar _ => 1
-| (t → t')%typ => 1 + typ_size t + typ_size t'
-end.
-
-Lemma typ_size_non_zero : forall t,
-    typ_size t > 0.
-Proof.
-  intro t; induction t; simpl; lia.
-Qed.
-
-Fixpoint tvars (t : typ) : list nat :=
-  match t with
-  | TBool | TNat => []
-  | TVar T => [T]
-  | (t → t')%typ => tvars t ++ tvars t'
-  end.
-
-Definition Ctvars : list (typ * typ) -> list nat :=
-  fold_right (fun '(l,r) acc => tvars l ++ tvars r ++ acc) [].
-
-Definition C_size : list (typ * typ) -> nat :=
-  fold_right (fun '(l,r) acc => typ_size l + typ_size r + acc) 0.
-
-Definition typ_size_vars (t : typ) : nat :=
-  typ_size t + length (tvars t).
-
-Lemma typ_size_vars_non_zero : forall t,
-    typ_size_vars t > 0.
-Proof.
-  intros t; unfold typ_size_vars.
-  pose proof typ_size_non_zero t; lia.
-Qed.
-
-Definition C_size_vars : list (typ * typ) -> nat :=
-  fold_right
-    (fun '(l,r) acc =>
-       typ_size_vars l + typ_size_vars r + acc) 0.
-
-Definition tenv : Set := @env nat typ.
-
-Reserved Notation "s † t" (at level 20, right associativity).
-
-Fixpoint tsub (σ : tenv) (t : typ) {struct t} : typ :=
-  match t with
-  | TBool => TBool
-  | TNat => TNat
-  | (t → t')%typ => (σ † t → σ † t')%typ
-  | TVar T => match σ T with
-             | Some τ => τ
-             | None => TVar T
-             end
-  end
-where "σ † t" := (tsub σ t) : typ_scope.
-
-Lemma tsub_empty : forall t, (∅%env † t)%typ = t.
-Proof.
-  intro t; induction t; simpl in *; auto.
-  rewrite IHt1. rewrite IHt2. reflexivity.
-Qed.
-
-Definition tsub_compose (s1 s2 : tenv) : tenv :=
-  env_map (tsub s1) s2.
-
-Notation "s1 ‡ s2"
-  := (tsub_compose s1 s2)
-       (at level 21, left associativity) : env_scope.
-
-Lemma tsub_twice : forall t s,
-    ((s ‡ s)%env † t = s † s † t)%typ.
-Proof.
-  intro t;
-    induction t as [| | t1 IHt1 t2 IHt2 | T];
-    intros s; simpl; try reflexivity.
-  - rewrite IHt1, IHt2. reflexivity.
-  - unfold "‡",env_map.
-    destruct (s T) as [t |] eqn:HeqT; simpl; auto.
-    rewrite HeqT. reflexivity.
-Qed.
-
-Definition satisfy σ τ1 τ2 : Prop := (σ † τ1 = σ † τ2)%typ.
-
-Lemma satisfy_reflexive : forall σ, Reflexive (satisfy σ).
-Proof.
-  unfold Reflexive, satisfy; reflexivity.
-Qed.
-
-Lemma satisfy_symmetric : forall σ, Symmetric (satisfy σ).
-Proof.
-  unfold Symmetric, satisfy; auto.
-Qed.
-
-Lemma satisfy_transitive : forall σ, Transitive (satisfy σ).
-Proof.
-  unfold Transitive, satisfy; intros; etransitivity; eauto.
-Qed.
 
 Inductive op : Set :=
 | And | Or | Add | Sub | Eq | Lt.
@@ -149,8 +38,6 @@ Notation "e1 ⋅ e2"
   := (App e1 e2)
        (at level 34, left associativity) : term_scope.
 
-Definition gamma : Set := @env string typ.
-
 Reserved Notation "g ⊨ e ∈ t" (at level 70).
 
 Inductive typing (Γ : gamma) : term -> typ -> Prop :=
@@ -179,26 +66,6 @@ Inductive typing (Γ : gamma) : term -> typ -> Prop :=
     Γ ⊨ e2 ∈ τ ->
     Γ ⊨ Op o e1 e2 ∈ τ'
 where "g ⊨ e ∈ t" := (typing g e t).
-
-Notation "s × g" := (env_map (tsub s) g)
-                      (at level 25, right associativity) : env_scope.
-
-Lemma tsub_gamma_empty : forall g : gamma, (∅ × g = g)%env.
-Proof.
-  intros g. extensionality n.
-  unfold env_map.
-  destruct (g n) eqn:Heq; auto.
-  rewrite tsub_empty. reflexivity.
-Qed.
-
-Lemma tsub_gamma_twice : forall (s : tenv) (g : gamma),
-    (s ‡ s × g = s × s × g)%env.
-Proof.
-  intros s g. extensionality T.
-  unfold "×", env_map.
-  destruct (g T) as [tg |] eqn:Heqtg; auto.
-  f_equal. apply tsub_twice.
-Qed.
 
 Section Prez.
   Local Hint Constructors op_typs : core.
@@ -319,9 +186,6 @@ Section Sound.
   Qed.
 End Sound.
 
-Definition Ctsub (s : tenv) : list (typ * typ) -> list (typ * typ) :=
-  map (fun '(l,r) => (s † l, s † r)%typ).
-
 Inductive Unify : list (typ * typ) -> tenv -> Prop :=
 | Unify_nil :
     Unify [] ∅%env
@@ -341,34 +205,6 @@ Inductive Unify : list (typ * typ) -> tenv -> Prop :=
 | Unify_cons_arrow t t' τ τ' C σ :
     Unify ((t,τ) :: (t',τ') :: C) σ ->
     Unify ((t → τ, t' → τ')%typ :: C) σ.
-
-Fixpoint typ_eq (l r : typ) : bool :=
-  match l, r with
-  | TBool, TBool | TNat, TNat => true
-  | TVar T1, TVar T2 => T1 =? T2
-  | (l → l')%typ, (r → r')%typ
-    => typ_eq l r && typ_eq l' r'
-  | _, _ => false
-  end.
-
-Lemma typ_eq_reflexive : forall t, typ_eq t t = true.
-Proof.
-  Local Hint Resolve andb_true_intro : core.
-  Local Hint Resolve Nat.eqb_refl : core.
-  intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
-    simpl; try reflexivity; auto.
-Qed.
-  
-Lemma typ_eq_eq : forall l r,
-    typ_eq l r = true -> l = r.
-Proof.
-  Hint Rewrite andb_true_iff : core.
-  Hint Rewrite Nat.eqb_eq : core.
-  intro l; induction l as [| | l IHl l' IHl' | L];
-    intros [| | r r' | R] H; simpl in *;
-      try discriminate; try reflexivity;
-        autorewrite with core in *; f_equal; intuition.
-Qed.
 
 Open Scope maybe_scope.
 

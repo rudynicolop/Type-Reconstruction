@@ -1,7 +1,7 @@
 Require Export Coq.Classes.EquivDec
         Coq.Lists.List Coq.Bool.Bool
         Coq.Sorting.Permutation
-        CoqRecon.Base.
+        CoqRecon.Base Coq.micromega.Lia.
 Export ListNotations.
 
 Declare Scope set_scope.
@@ -129,13 +129,124 @@ Section Sets.
   Qed.
 
   Lemma Not_In_member_iff : forall a l,
-      ~ In a l <-> member a l = false.
+      member a l = false <-> ~ In a l.
   Proof.
     intros a l.
     pose proof In_member_reflects a l as H.
     inv H; intuition.
   Qed.
+
+  Fixpoint remove_dups (l : list A) : list A :=
+    match l with
+    | [] => []
+    | a :: l => (if member a l then [] else [a]) ++ remove_dups l
+    end.
+
+  Lemma remove_dups_sound : forall l a,
+      In a (remove_dups l) -> In a l.
+  Proof.
+    intro l;
+      induction l as [| h t IHt];
+      intros a HIn; simpl in *; auto.
+    destruct (member h t) eqn:Hmemht; simpl in *; intuition.
+  Qed.
+
+  Lemma remove_dups_complete: forall l a,
+      In a l -> In a (remove_dups l).
+  Proof.
+    intro l;
+      induction l as [| h t IHt];
+      intros a HIn; simpl in *; auto.
+    destruct HIn as [Hha | HInat]; subst.
+    - destruct (member a t) eqn:Hmemat; simpl; auto.
+    - rewrite in_app_iff; auto.
+  Qed.
+
+  Local Hint Resolve remove_dups_sound : core.
+  Local Hint Resolve remove_dups_complete : core.
   
+  Lemma remove_dups_iff : forall a l,
+      In a (remove_dups l) <-> In a l.
+  Proof.
+    intuition.
+  Qed.
+
+  Local Hint Constructors NoDup : core.
+  
+  Lemma remove_dups_NoDup : forall l,
+      NoDup (remove_dups l).
+  Proof.
+    intro l;
+      induction l as [| a l IHl]; simpl in *; auto.
+    destruct (member a l) eqn:Hmemal; simpl; auto.
+    rewrite Not_In_member_iff in Hmemal; auto.
+  Qed.
+
+  Lemma remove_dups_length : forall l : list A,
+      length (remove_dups l) <= length l.
+  Proof.
+    intro l; induction l as [| h t IHt];
+      simpl; try lia.
+    rewrite app_length.
+    destruct (member h t) eqn:Hmem; simpl; lia.
+  Qed.
+
+  Lemma remove_dups_idempotent : forall l : list A,
+      remove_dups (remove_dups l) = remove_dups l.
+  Proof.
+    intro l; induction l as [| h t IHt]; simpl; auto.
+    destruct (member h t) eqn:Hmemht; simpl; auto.
+    assert (Hmem': member h (remove_dups t) = false).
+    { rewrite Not_In_member_iff in *.
+      auto using remove_dups_sound. }
+    rewrite Hmem'; simpl; f_equal; assumption.
+  Qed.
+  
+  Lemma remove_dups_app : forall l r : list A,
+      remove_dups (l ++ r) =
+      remove_dups (remove_dups l ++ remove_dups r).
+  Proof.
+    intro l; induction l as [| a l IHl]; intro r; simpl.
+    - rewrite remove_dups_idempotent; reflexivity.
+    - pose proof (In_member_reflects a l) as Hal; inv Hal; simpl.
+      + assert (Halr: member a (l ++ r) = true).
+        { apply In_member.
+          rewrite in_app_iff. intuition. }
+        rewrite Halr; simpl; auto.
+      + pose proof (In_member_reflects a r) as Har; inv Har; simpl.
+        * assert (Halr: member a (l ++ r) = true).
+          { apply In_member.
+            rewrite in_app_iff. intuition. }
+          rewrite Halr; simpl.
+          assert (Halr': member a (remove_dups l ++ remove_dups r) = true).
+          { apply In_member. rewrite in_app_iff.
+            auto using remove_dups_complete. }
+          rewrite Halr'; simpl; auto.
+        * assert (Halr: member a (l ++ r) = false).
+          { rewrite Not_In_member_iff.
+            rewrite in_app_iff. intuition. }
+          rewrite Halr; simpl.
+          assert (Halr': member a (remove_dups l ++ remove_dups r) = false).
+          { apply Not_In_member_iff. rewrite in_app_iff.
+            Local Hint Resolve remove_dups_sound : core.
+            intuition. }
+          rewrite Halr'; simpl; f_equal; auto.
+  Qed.
+
+  Lemma remove_dups_app_length : forall l r : list A,
+      length (remove_dups (l ++ r)) <=
+      length (remove_dups l) + length (remove_dups r).
+  Proof.
+    intro l; induction l as [| a l IHl]; intro r; simpl; try lia.
+    repeat rewrite app_length.
+    pose proof (In_member_reflects a l) as Hal; inv Hal; simpl.
+    - assert (Halr: member a (l ++ r) = true).
+      { apply In_member. rewrite in_app_iff. intuition. }
+      rewrite Halr; simpl; auto.
+    - pose proof (In_member_reflects a (l ++ r)) as Halr;
+        inv Halr; simpl; pose proof IHl r; lia.
+  Qed.
+    
   Fixpoint intersect (l r : list A) : list A :=
     match l with
     | [] => []
@@ -264,3 +375,17 @@ Section SubsetUnion.
     auto using Permutation_app_comm.
   Qed.
 End SubsetUnion.
+
+Section NatSet.
+  Local Hint Constructors Forall : core.
+
+  Search list_max.
+  
+  Lemma list_max_succ : forall l : list nat,
+    Forall (fun n => n < 1 + list_max l) l.
+  Proof.
+    Search list_max.
+    intro l; induction l as [| h t IHt]; auto.
+    constructor.
+  Abort.
+End NatSet.

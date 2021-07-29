@@ -2,6 +2,27 @@ Require Export CoqRecon.Mono.
 
 (** Completeness is never true :(. *)
 
+Lemma tsub_twice : forall t s,
+    ((s ‡ s)%env † t = s † s † t)%typ.
+Proof.
+  intro t;
+    induction t as [| | t1 IHt1 t2 IHt2 | T];
+    intros s; simpl; try reflexivity.
+  - rewrite IHt1, IHt2. reflexivity.
+  - unfold "‡",env_map.
+    destruct (s T) as [t |] eqn:HeqT; simpl; auto.
+    rewrite HeqT. reflexivity.
+Qed.
+
+Lemma tsub_gamma_twice : forall (s : tenv) (g : gamma),
+    (s ‡ s × g = s × s × g)%env.
+Proof.
+  intros s g. extensionality T.
+  unfold "×", env_map.
+  destruct (g T) as [tg |] eqn:Heqtg; auto.
+  f_equal. apply tsub_twice.
+Qed.
+
 Section Complete.
   Local Hint Resolve sound : core.
   Local Hint Resolve preservation : core.
@@ -74,7 +95,7 @@ Section Complete.
       destruct IH1 as [s1 [HC1 [Ht1 Hs1]]].
       destruct IH2 as [s2 [HC2 [Ht2 Hs2]]].
       assert (HX12: member T X1 = false /\ member T X2 = false).
-      { repeat rewrite <- Not_In_member_iff; split;
+      { repeat rewrite Not_In_member_iff; split;
           intros ?; apply H2; repeat rewrite in_app_iff;
             intuition. }
       destruct HX12 as [HX1 HX2].
@@ -103,10 +124,10 @@ Section Complete.
           -- symmetry; apply Hd. 
              right; auto using member_In.
           -- assert (HY1: member Y X1 = false).
-             rewrite <- Not_In_member_iff in *.
+             rewrite Not_In_member_iff in *.
              intuition. rewrite HY1.
              assert (HY2: member Y X2 = false).
-             rewrite <- Not_In_member_iff in *.
+             rewrite Not_In_member_iff in *.
              intuition. rewrite HY2.
              reflexivity.
     - apply IHconstraint_typing1 in H8 as IH1;
@@ -138,7 +159,7 @@ Section Complete.
                     member Y X1 = false /\
                     member Y X2 = false /\
                     member Y X3 = false).
-          { repeat rewrite <- Not_In_member_iff in *.
+          { repeat rewrite Not_In_member_iff in *.
             repeat rewrite in_app_iff in HYmem.
             intuition. }
           destruct HY123 as [HY1 [HY2 HY3]].
