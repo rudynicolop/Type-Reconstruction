@@ -54,21 +54,63 @@ Reserved Notation "l ∖ r" (at level 48, left associativity).
 Section Sets.
   Context {A : Set}.
 
+  (** [l ⊆ r] *)
+  Definition Subset (l r : list A) : Prop :=
+    forall a, In a l -> In a r.
+
+  Local Hint Unfold Subset : core.
+  
   (** [u] is the union of [l] & [r]. *)
   Definition Union (l r u : list A) : Prop :=
     forall a, In a u <-> In a l \/ In a r.
+
+  Local Hint Unfold Union : core.
+
+  Lemma Union_Subset_l : forall l r u,
+      Union l r u -> Subset l u.
+  Proof.
+    firstorder.
+  Qed.
+
+  Lemma Union_Subset_r : forall l r u,
+      Union l r u -> Subset r u.
+  Proof.
+    firstorder.
+  Qed.
 
   (** [i] is the intersection of [l] & [r]. *)
   Definition Intersection (l r i : list A) : Prop :=
     forall a, In a i <-> In a l /\ In a r.
 
+  Local Hint Unfold Intersection : core.
+
+  Lemma Inter_Subset_l : forall l r i,
+      Intersection l r i -> Subset i l.
+  Proof.
+    firstorder.
+  Qed.
+
+  Lemma Inter_Subset_r : forall l r i,
+      Intersection l r i -> Subset i r.
+  Proof.
+    firstorder.
+  Qed.
+  
   (** [d] is the diff of [l] & [r]. *)
   Definition Difference (l r d : list A) : Prop :=
     forall a, In a d <-> In a l /\ ~ In a r.
+
+  Local Hint Unfold Difference : core.
+  
+  Lemma Diff_Subset : forall l r d,
+      Difference l r d -> Subset d l.
+  Proof.
+    firstorder.
+  Qed.
   
   Lemma append_Union : forall l r, Union l r (l ++ r).
   Proof.
-    unfold Union. auto using in_app_iff.
+    auto using in_app_iff.
   Qed.
 
   Context {HEA: EqDec A eq}.
@@ -110,6 +152,14 @@ Section Sets.
     intros a l; destruct (member a l) eqn:Hmem; auto.
     constructor. intros H. apply In_member in H.
     rewrite H in Hmem. discriminate.
+  Qed.
+
+  Lemma Not_In_member_ff : forall a l,
+      ~ In a l <-> member a l = false.
+  Proof.
+    intros a l.
+    pose proof In_member_reflects a l as H.
+    inv H; intuition.
   Qed.
   
   Fixpoint intersect (l r : list A) : list A :=
@@ -162,8 +212,45 @@ Section Sets.
         * rewrite in_app_iff. right.
           apply IHt. intuition.
   Qed.
+
+  Local Hint Resolve Union_Subset_l : core.
+  Local Hint Resolve Union_Subset_r : core.
+  Local Hint Resolve Inter_Subset_l : core.
+  Local Hint Resolve Inter_Subset_r : core.
+  Local Hint Resolve Diff_Subset : core.
+  Local Hint Resolve append_Union : core.
+  Local Hint Resolve Intersection_intersect : core.
+  Local Hint Resolve Difference_difference : core.
+  
+  Lemma Subset_union_l : forall l r, Subset l (l ++ r).
+  Proof.
+    eauto.
+  Qed.
+
+  Lemma Subset_union_r : forall l r, Subset r (l ++ r).
+  Proof.
+    eauto.
+  Qed.
+
+  Lemma Subset_inter_l : forall l r, Subset (intersect l r) l.
+  Proof.
+    eauto.
+  Qed.
+
+  Lemma Subset_inter_r : forall l r, Subset (intersect l r) r.
+  Proof.
+    eauto.
+  Qed.
+
+  Lemma Subset_diff : forall l r, Subset (difference l r) l.
+  Proof.
+    eauto.
+  Qed.
 End Sets.
 
+Notation "l ⊆ r"
+  := (Subset l r)
+       (at level 50, no associativity) : set_scope.
 Notation "l ∪ r" := (l ++ r) : set_scope.
 Notation "l ∩ r" := (intersect l r) : set_scope.
 Notation "l ∖ r" := (difference l r) : set_scope.
@@ -236,6 +323,9 @@ Section Env.
     destruct (env_binds k e) as [Hk | [v Hk]]; auto.
     apply HE in Hk. contradiction.
   Qed.
+
+  Definition range (e : env) (r : list V) : Prop :=
+    forall v, In v r <-> exists k, e k = Some v.
 End Env.
 
 Section EnvMap.
@@ -259,6 +349,16 @@ Section EnvMap.
   Qed.
 End EnvMap.
 
+Section ComposeEnv.
+  Context {A B C : Set}.
+
+  Definition env_compose (eb : @env B C) (ea : @env A B) : @env A C :=
+    fun a => match ea a with
+          | Some b => eb b
+          | None => None
+          end.
+End ComposeEnv.
+
 Declare Scope env_scope.
 Delimit Scope env_scope with env.
 
@@ -269,3 +369,6 @@ Notation "k ↦ v ';;' e"
 Notation "e ∉ ks"
   := (mask e ks)
        (at level 15, left associativity) : env_scope.
+Notation "eb ≺ ea"
+  := (env_compose eb ea)
+       (at level 14, left associativity) : env_scope.

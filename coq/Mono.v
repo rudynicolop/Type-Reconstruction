@@ -52,24 +52,41 @@ Proof.
   rewrite IHt1. rewrite IHt2. reflexivity.
 Qed.
 
-Lemma tsub_exists : forall t σ, exists τ σ', (σ' † t = σ † σ' † τ)%typ.
-Proof.
-  intro t; induction t as [| | t IHt t' IHt' | n]; intros s.
-  - exists TBool; exists ∅%env; reflexivity.
-  - exists TNat; exists ∅%env; reflexivity.
-  - specialize IHt with s; specialize IHt' with s. simpl.
-    destruct IHt as [t1 [s1 IHt1]]; destruct IHt' as [t2 [s2 IHt2]].
-    (*exists (s1 † t1 → s2 † t2)%typ.
-  - destruct (env_binds n s) as [Hns | [t Hns]].
-    + exists (TVar n); simpl; rewrite Hns; reflexivity.
-    + *)
-Abort.
+Definition tsub_compose (s1 s2 : tenv) : tenv :=
+  env_map (tsub s1) s2.
 
 Notation "s1 ‡ s2"
-  := (fun t => (s1 † s2 † t)%typ)
-       (at level 21, left associativity).
+  := (tsub_compose s1 s2)
+       (at level 21, left associativity) : env_scope.
+
+Lemma tsub_twice : forall t s,
+    ((s ‡ s)%env † t = s † s † t)%typ.
+Proof.
+  intro t;
+    induction t as [| | t1 IHt1 t2 IHt2 | T];
+    intros s; simpl; try reflexivity.
+  - rewrite IHt1, IHt2. reflexivity.
+  - unfold "‡",env_map.
+    destruct (s T) as [t |] eqn:HeqT; simpl; auto.
+    rewrite HeqT. reflexivity.
+Qed.
 
 Definition satisfy σ τ1 τ2 : Prop := (σ † τ1 = σ † τ2)%typ.
+
+Lemma satisfy_reflexive : forall σ, Reflexive (satisfy σ).
+Proof.
+  unfold Reflexive, satisfy; reflexivity.
+Qed.
+
+Lemma satisfy_symmetric : forall σ, Symmetric (satisfy σ).
+Proof.
+  unfold Symmetric, satisfy; auto.
+Qed.
+
+Lemma satisfy_transitive : forall σ, Transitive (satisfy σ).
+Proof.
+  unfold Transitive, satisfy; intros; etransitivity; eauto.
+Qed.
 
 Inductive op : Set :=
 | And | Or | Add | Sub | Eq | Lt.
@@ -141,6 +158,15 @@ Proof.
   unfold env_map.
   destruct (g n) eqn:Heq; auto.
   rewrite tsub_empty. reflexivity.
+Qed.
+
+Lemma tsub_gamma_twice : forall (s : tenv) (g : gamma),
+    (s ‡ s × g = s × s × g)%env.
+Proof.
+  intros s g. extensionality T.
+  unfold "×", env_map.
+  destruct (g T) as [tg |] eqn:Heqtg; auto.
+  f_equal. apply tsub_twice.
 Qed.
 
 Section Prez.
@@ -265,89 +291,90 @@ End Sound.
 Section Complete.
   Local Hint Resolve sound : core.
   Local Hint Resolve preservation : core.
-  
-  Lemma gamma_map : forall (g : gamma) (s : tenv) T t,
-      s T = None ->
-      (T ↦ t;; s × g = T ↦ t;; ∅ × s × g)%env.
+
+  Lemma lem : forall Γ e τ X C,
+      Γ ⊢ e ∈ τ ⊣ X @ C -> (tvars τ ⊆ X)%set.
   Proof.
-    intros g s T t HsT. extensionality n.
-    unfold env_map, bind.
-    destruct (g n) as [tn |] eqn:Hgn;
-      try reflexivity; f_equal.
-    clear Hgn g n.
-    generalize dependent T;
-      generalize dependent t;
-      generalize dependent s.
-    induction tn as [| | t1 IHt1 t2 IHt2 | m];
-      intros s t T HsT; simpl; try reflexivity.
-    - rewrite IHt1, IHt2 by assumption; reflexivity.
-    - destruct (equiv_dec m T) as [HmT | HmT];
-        unfold equiv, complement in *; subst.
-      + rewrite HsT. simpl.
-        destruct (equiv_dec T T) as [? | ?];
-          unfold equiv, complement in *;
-          try contradiction; try reflexivity.
-      + destruct (s m) as [tm |] eqn:Hsm; simpl.
-        * clear m s HsT HmT Hsm.
-          induction tm; simpl; try reflexivity.
-          -- rewrite <- IHtm1; rewrite <- IHtm2.
-             reflexivity.
-          -- destruct (equiv_dec n T) as [HnT | HnT];
-               unfold equiv, complement in *; simpl;
-                 try reflexivity. admit.
-        * destruct (equiv_dec m T) as [? | ?];
-            unfold equiv, complement in *;
-            try contradiction; try reflexivity.
-  Admitted.
-  
-  Theorem complete : forall Γ e t X C,
+    intros g e t X C H; induction H;
+      simpl; try firstorder.
+  Abort.
+
+  (* Pierce's proof in TAPL relies upon this assumption. *)
+  Lemma tsub_inverse : forall t s,
+      exists t', (s † t')%typ = t /\ forall n, In n (tvars t') -> s n = None.
+  Proof.
+    intros t s;
+      induction t as
+        [| | t1 [t1' [IHt1 IHs1]] t2 [t2' [IHt2 IHs2]] | m].
+    - exists TBool; intuition.
+    - exists TNat; intuition.
+    - exists (t1' → t2')%typ; simpl.
+      rewrite IHt1, IHt2.
+      split; [reflexivity |].
+      intros n H. rewrite in_app_iff in H.
+      intuition.
+    - destruct (env_binds m s) as [HNone | [t HSome]].
+      + exists (TVar m); simpl. rewrite HNone.
+        intuition; subst; assumption.
+      + (* Which is difficult to formally verify...*)
+  Abort.
+
+  (** I used Pierce's [CT-Abs-Inf] rule
+      in place of [CT-Abs].
+      It seems his form of completenss is impossible
+      with this... *)
+  Theorem complete_weak : forall Γ e t X C,
     Γ ⊢ e ∈ t ⊣ X @ C ->
-    forall σ τ d,
+    forall σ τ,
       (σ × Γ)%env ⊨ e ∈ τ ->
-      dom σ d -> (X ∩ d = [])%set ->
+      (forall m, In m X -> σ m = None) ->
       exists σ', Forall (uncurry (satisfy σ')) C /\
-            (σ † t = τ)%typ /\ (σ' ∉ X = σ)%env.
+            (σ' † t = τ)%typ /\ (σ' ∉ X = σ)%env.
   Proof.
     intros g e τ X C H; induction H;
-      intros s t d Ht Hd Hemp. (*inv Ht.*)
-    - inv Ht; exists s; intuition.
-    - inv Ht; exists s; intuition.
-    - inv Ht; exists s; intuition.
+      intros s t Ht Hd; inv Ht;
+        try (exists s; intuition; assumption).
+    - exists s; intuition.
       unfold bound,env_map in *.
       rewrite H in H1. inv H1.
       reflexivity.
-    - inv Ht.
-      assert
-        (((T ↦ ((T ↦ τ0;; ∅)%env † τ0)%typ;; s) × x ↦ TVar T;; Γ)
-           %env ⊨ e ∈ ((T ↦ τ0;; ∅)%env † τ')%typ).
-      { assert (s T = None).
-        { assert (~ In T d).
-          { intros HIn.
-            apply In_member in HIn. simpl in Hemp.
-            rewrite HIn in Hemp; simpl in *.
-            discriminate. }
-          eauto using not_in_dom. }
-        apply preservation
-          with (σ := (T ↦ τ0;; ∅)%env) in H4.
-        rewrite <- env_map_bind.
-        unfold tsub at 1. rewrite bind_sound.
-        rewrite <- env_map_bind in H4.
-        Check gamma_map.
-        
-        
-        
-  (* apply preservation
-        with (σ := (T ↦ τ0;; ∅)%env) in H4.
-      (*Set Printing Implicit.
-      Set Typeclasses Debug.    *)
-      remember (T ↦ ((T ↦ τ0;; ∅)%env † τ0)%typ;; s)%env as s' eqn:Heqs'.
-      remember ((T ↦ τ0;; ∅)%env † τ')%typ as t' eqn:Heqt'.
-      specialize IHconstraint_typing
-        with (d := T :: d) (σ := s') (τ0 := t').
-      subst s'; subst t'.
-      rewrite <- env_map_bind in H4.
-      rewrite <- env_map_bind in IHconstraint_typing.
-      unfold tsub at 1 in IHconstraint_typing.
-      rewrite bind_sound in IHconstraint_typing. *)
-  Admitted.
+    - (* This case is intractable.
+         There is no way to use the induction hypothesis. *)
+      admit.
+    - apply IHconstraint_typing1 in H7 as IH1;
+        [clear IHconstraint_typing1 H7 | intuition].
+      apply IHconstraint_typing2 in H9 as IH2;
+        [clear IHconstraint_typing2 H9 | intuition].
+      destruct IH1 as [s1 [HC1 [Ht1 Hs1]]].
+      destruct IH2 as [s2 [HC2 [Ht2 Hs2]]].
+      assert (HX12: member T X1 = false /\ member T X2 = false).
+      { repeat rewrite <- Not_In_member_ff; split;
+          intros ?; apply H2; repeat rewrite in_app_iff;
+            intuition. }
+      destruct HX12 as [HX1 HX2].
+      exists (fun Y =>
+           if negb (member Y (T :: X1 ∪ X2))%set then s Y
+           else if member Y X1 then s1 Y
+                else if member Y X2 then s2 Y
+                     else Some t). repeat split.
+      + constructor; simpl.
+        * unfold satisfy; simpl.
+          destruct (equiv_dec T T) as [HTT | HTT];
+            unfold equiv, complement in *; try contradiction; simpl.
+          (* Need induction...probably...*) admit.
+        * rewrite Forall_app; split.
+          -- (* Need induction. *) admit.
+          -- (* Need induction. *) admit.
+      + simpl; destruct (equiv_dec T T) as [HTT | HTT];
+          unfold equiv, complement in *; try contradiction; simpl.
+        rewrite HX1,HX2; reflexivity.
+      + extensionality Y; unfold "∉"; simpl.
+        destruct (equiv_dec Y T) as [HYT | HYT];
+          unfold equiv, complement in *; subst.
+        * symmetry; apply Hd; intuition.
+        * destruct (member Y (X1 ∪ X2))%set eqn:HYmem;
+            simpl; auto.
+          symmetry; apply Hd; intuition.
+          right; auto using member_In.
+  Abort.
 End Complete.
