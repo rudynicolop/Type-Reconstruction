@@ -1,8 +1,9 @@
-Require Import Coq.Strings.String
-        CoqRecon.Util Coq.Arith.PeanoNat.
+Require Export Coq.Strings.String
+        Coq.Arith.PeanoNat CoqRecon.Env
+        Coq.funind.Recdef CoqRecon.Maybe
+        Coq.micromega.Lia.
 
 Instance StringEqDec : EqDec string eq := {equiv_dec := string_dec}.
-(*Instance NatEquiv : Equivalence eq := Nat.eq_equiv.*)
 Instance NatEqDec
   : @EqDec nat (@eq nat) (@eq_equivalence nat) :=
   {equiv_dec := Nat.eq_dec}.
@@ -20,6 +21,18 @@ Notation "t1 → t2"
   := (TArrow t1 t2)
        (at level 30, right associativity) : typ_scope.
 
+Fixpoint typ_size (t : typ) : nat :=
+match t with
+| TBool | TNat | TVar _ => 1
+| (t → t')%typ => 1 + typ_size t + typ_size t'
+end.
+
+Lemma typ_size_non_zero : forall t,
+    typ_size t > 0.
+Proof.
+  intro t; induction t; simpl; lia.
+Qed.
+
 Fixpoint tvars (t : typ) : list nat :=
   match t with
   | TBool | TNat => []
@@ -29,6 +42,24 @@ Fixpoint tvars (t : typ) : list nat :=
 
 Definition Ctvars : list (typ * typ) -> list nat :=
   fold_right (fun '(l,r) acc => tvars l ++ tvars r ++ acc) [].
+
+Definition C_size : list (typ * typ) -> nat :=
+  fold_right (fun '(l,r) acc => typ_size l + typ_size r + acc) 0.
+
+Definition typ_size_vars (t : typ) : nat :=
+  typ_size t + length (tvars t).
+
+Lemma typ_size_vars_non_zero : forall t,
+    typ_size_vars t > 0.
+Proof.
+  intros t; unfold typ_size_vars.
+  pose proof typ_size_non_zero t; lia.
+Qed.
+
+Definition C_size_vars : list (typ * typ) -> nat :=
+  fold_right
+    (fun '(l,r) acc =>
+       typ_size_vars l + typ_size_vars r + acc) 0.
 
 Definition tenv : Set := @env nat typ.
 
@@ -288,93 +319,106 @@ Section Sound.
   Qed.
 End Sound.
 
-Section Complete.
-  Local Hint Resolve sound : core.
-  Local Hint Resolve preservation : core.
+Definition Ctsub (s : tenv) : list (typ * typ) -> list (typ * typ) :=
+  map (fun '(l,r) => (s † l, s † r)%typ).
 
-  Lemma lem : forall Γ e τ X C,
-      Γ ⊢ e ∈ τ ⊣ X @ C -> (tvars τ ⊆ X)%set.
-  Proof.
-    intros g e t X C H; induction H;
-      simpl; try firstorder.
-  Abort.
+Inductive Unify : list (typ * typ) -> tenv -> Prop :=
+| Unify_nil :
+    Unify [] ∅%env
+| Unify_cons_skip τ C σ :
+    Unify C σ ->
+    Unify ((τ,τ) :: C) σ
+| Unify_cons_var_l T τ C σ :
+    ~ In T (tvars τ) ->
+    let s := (T ↦ τ;; ∅)%env in
+    Unify (Ctsub s C) σ ->
+    Unify ((TVar T, τ) :: C) (σ ‡ s)%env
+| Unify_cons_var_r τ T C σ :
+    ~ In T (tvars τ) ->
+    let s := (T ↦ τ;; ∅)%env in
+    Unify (Ctsub s C) σ ->
+    Unify ((τ , TVar T) :: C) (σ ‡ s)%env
+| Unify_cons_arrow t t' τ τ' C σ :
+    Unify ((t,τ) :: (t',τ') :: C) σ ->
+    Unify ((t → τ, t' → τ')%typ :: C) σ.
 
-  (* Pierce's proof in TAPL relies upon this assumption. *)
-  Lemma tsub_inverse : forall t s,
-      exists t', (s † t')%typ = t /\ forall n, In n (tvars t') -> s n = None.
-  Proof.
-    intros t s;
-      induction t as
-        [| | t1 [t1' [IHt1 IHs1]] t2 [t2' [IHt2 IHs2]] | m].
-    - exists TBool; intuition.
-    - exists TNat; intuition.
-    - exists (t1' → t2')%typ; simpl.
-      rewrite IHt1, IHt2.
-      split; [reflexivity |].
-      intros n H. rewrite in_app_iff in H.
-      intuition.
-    - destruct (env_binds m s) as [HNone | [t HSome]].
-      + exists (TVar m); simpl. rewrite HNone.
-        intuition; subst; assumption.
-      + (* Which is difficult to formally verify...*)
-  Abort.
+Fixpoint typ_eq (l r : typ) : bool :=
+  match l, r with
+  | TBool, TBool | TNat, TNat => true
+  | TVar T1, TVar T2 => T1 =? T2
+  | (l → l')%typ, (r → r')%typ
+    => typ_eq l r && typ_eq l' r'
+  | _, _ => false
+  end.
 
-  (** I used Pierce's [CT-Abs-Inf] rule
-      in place of [CT-Abs].
-      It seems his form of completenss is impossible
-      with this... *)
-  Theorem complete_weak : forall Γ e t X C,
-    Γ ⊢ e ∈ t ⊣ X @ C ->
-    forall σ τ,
-      (σ × Γ)%env ⊨ e ∈ τ ->
-      (forall m, In m X -> σ m = None) ->
-      exists σ', Forall (uncurry (satisfy σ')) C /\
-            (σ' † t = τ)%typ /\ (σ' ∉ X = σ)%env.
-  Proof.
-    intros g e τ X C H; induction H;
-      intros s t Ht Hd; inv Ht;
-        try (exists s; intuition; assumption).
-    - exists s; intuition.
-      unfold bound,env_map in *.
-      rewrite H in H1. inv H1.
-      reflexivity.
-    - (* This case is intractable.
-         There is no way to use the induction hypothesis. *)
-      admit.
-    - apply IHconstraint_typing1 in H7 as IH1;
-        [clear IHconstraint_typing1 H7 | intuition].
-      apply IHconstraint_typing2 in H9 as IH2;
-        [clear IHconstraint_typing2 H9 | intuition].
-      destruct IH1 as [s1 [HC1 [Ht1 Hs1]]].
-      destruct IH2 as [s2 [HC2 [Ht2 Hs2]]].
-      assert (HX12: member T X1 = false /\ member T X2 = false).
-      { repeat rewrite <- Not_In_member_ff; split;
-          intros ?; apply H2; repeat rewrite in_app_iff;
-            intuition. }
-      destruct HX12 as [HX1 HX2].
-      exists (fun Y =>
-           if negb (member Y (T :: X1 ∪ X2))%set then s Y
-           else if member Y X1 then s1 Y
-                else if member Y X2 then s2 Y
-                     else Some t). repeat split.
-      + constructor; simpl.
-        * unfold satisfy; simpl.
-          destruct (equiv_dec T T) as [HTT | HTT];
-            unfold equiv, complement in *; try contradiction; simpl.
-          (* Need induction...probably...*) admit.
-        * rewrite Forall_app; split.
-          -- (* Need induction. *) admit.
-          -- (* Need induction. *) admit.
-      + simpl; destruct (equiv_dec T T) as [HTT | HTT];
-          unfold equiv, complement in *; try contradiction; simpl.
-        rewrite HX1,HX2; reflexivity.
-      + extensionality Y; unfold "∉"; simpl.
-        destruct (equiv_dec Y T) as [HYT | HYT];
-          unfold equiv, complement in *; subst.
-        * symmetry; apply Hd; intuition.
-        * destruct (member Y (X1 ∪ X2))%set eqn:HYmem;
-            simpl; auto.
-          symmetry; apply Hd; intuition.
-          right; auto using member_In.
-  Abort.
-End Complete.
+Lemma typ_eq_reflexive : forall t, typ_eq t t = true.
+Proof.
+  Local Hint Resolve andb_true_intro : core.
+  Local Hint Resolve Nat.eqb_refl : core.
+  intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
+    simpl; try reflexivity; auto.
+Qed.
+  
+Lemma typ_eq_eq : forall l r,
+    typ_eq l r = true -> l = r.
+Proof.
+  Hint Rewrite andb_true_iff : core.
+  Hint Rewrite Nat.eqb_eq : core.
+  intro l; induction l as [| | l IHl l' IHl' | L];
+    intros [| | r r' | R] H; simpl in *;
+      try discriminate; try reflexivity;
+        autorewrite with core in *; f_equal; intuition.
+Qed.
+
+Open Scope maybe_scope.
+
+Function unify (C : list (typ * typ)) {measure C_size_vars C} : option tenv :=
+  match C with
+  | [] => Some ∅%env
+  | (l, r) :: C =>
+    if typ_eq l r then
+      unify C
+    else
+      match l, r with
+      | TVar L, _ =>
+        if member L (tvars r) then
+          None
+        else
+          let s' := (L ↦ r;; ∅)%env in
+          s ↤ unify (Ctsub s' C);; (s ‡ s')%env
+      | _, TVar R =>
+        if member R (tvars l) then
+          None
+        else
+          let s' := (R ↦ l;; ∅)%env in
+          s ↤ unify (Ctsub s' C);; (s ‡ s')%env
+      | (l → l')%typ,(r → r')%typ =>
+        unify ((l,r) :: (l',r') :: C)
+      | _, _ => None
+      end
+  end.
+Proof.
+  pose proof typ_size_vars_non_zero as Hnz.
+  - intros; simpl.
+    pose proof Hnz l; pose proof Hnz r. lia.
+  - intros; simpl.
+    clear r l p teq2 teq3 teq0 teq1 teq4 C teq.
+    rename C0 into C.
+    induction C as [| [l r] C IHC]; simpl; try lia.
+    admit.
+    (** Need lemma that shows for a type [τ],
+       its measure [typ_size_vars] is no larger
+       after a type substitution [X ↦ t;; ∅ ]
+       when its type variable [X]
+       does not appear free in [t],
+       [[
+       forall X t τ,
+       ~ In X (tvars t) ->
+       typ_size_vars ((X ↦ t;; ∅) † τ) <= typ_size_vars
+       ]] *)
+  - intros. admit.
+  - intros; simpl. unfold typ_size_vars; simpl.
+    repeat rewrite app_length. lia.
+  - intros. admit.
+  - intros. admit.
+Abort.
