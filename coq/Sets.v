@@ -379,13 +379,35 @@ End SubsetUnion.
 Section NatSet.
   Local Hint Constructors Forall : core.
 
-  Search list_max.
+  Lemma list_max_ge : forall l : list nat,
+      Forall (fun n => n <= list_max l) l.
+  Proof.
+    intro l; induction l as [| h t IHt];
+      simpl; constructor; try lia.
+    apply Forall_forall.
+    intros n HIn.
+    apply Forall_forall
+      with (x:=n) in IHt; try assumption. lia.
+  Qed.
   
   Lemma list_max_succ : forall l : list nat,
     Forall (fun n => n < 1 + list_max l) l.
   Proof.
-    Search list_max.
-    intro l; induction l as [| h t IHt]; auto.
-    constructor.
-  Abort.
+    intros l. apply Forall_forall.
+    pose proof list_max_ge l as H.
+    intros n HIn.
+    apply Forall_forall
+      with (x:=n) in H; try assumption. lia.
+  Qed.
+
+  Lemma list_max_succ_not_in : forall l : list nat,
+      ~ In (1 + list_max l) l.
+  Proof.
+    intros l HIn.
+    pose proof list_max_succ l as H.
+    pose proof Forall_forall
+         (fun n => n < 1 + list_max l) l as [HFF _].
+    pose proof HFF H as H'.
+    apply H' in HIn. lia.
+  Qed.
 End NatSet.

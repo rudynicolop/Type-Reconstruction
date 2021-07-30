@@ -31,3 +31,6 @@ Notation "a '↤' o ';;' b"
 
 Ltac maybe_simpl :=
   unfold ">>|","∘",">>=",omap,obind; simpl.
+
+Ltac maybe_simpl_hyp H :=
+  unfold ">>|","∘",">>=",omap,obind in H; simpl H.

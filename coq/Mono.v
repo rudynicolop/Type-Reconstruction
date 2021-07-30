@@ -139,12 +139,6 @@ Inductive constraint_typing (Γ : gamma)
 where "g ⊢ e ∈ t ⊣ X @ C"
         := (constraint_typing g e t X C).
 
-Fail Fixpoint cgen (g : gamma) (e : term)
-  : typ * list nat * list (typ * typ) :=
-  match e with
-  | Var x => _
-  end.
-
 Section Sound.
   Local Hint Constructors op_typs : core.
   Local Hint Constructors typing : core.
@@ -208,7 +202,50 @@ Inductive Unify : list (typ * typ) -> tenv -> Prop :=
 
 Open Scope maybe_scope.
 
-Function unify (C : list (typ * typ)) {measure C_size_vars C} : option tenv :=
+Definition typs_of_op (o : op) : typ * typ :=
+  match o with
+  | And | Or  => (TBool, TBool)
+  | Add | Sub => (TNat,  TNat)
+  | Eq  | Lt  => (TNat,  TBool)
+  end.
+
+Fixpoint cgen (M : nat) (g : gamma) (e : term)
+  : option (typ * nat * list (typ * typ)) :=
+  match e with
+  | Bool _ => Some (TBool,M,[])
+  | Nat _  => Some (TNat,M,[])
+  | Var x  => t ↤ g x;; (t,M,[])
+  | (λ x ⇒ e)%term =>
+    cgen (S M) (x ↦ TVar M;; g)%env e >>|
+         fun '(t,X,C) => ((TVar M → t)%typ, X, C)
+  | (e1 ⋅ e2)%term =>
+    cgen M g e1 >>=
+         fun '(t1,M1,C1) =>
+           cgen M1 g e2 >>|
+                fun '(t2,M2,C2) =>
+                  (TVar M2, S M2,
+                   (t1,(t2 → TVar M2)%typ) :: C1 ++ C2)
+  | Cond e1 e2 e3 =>
+    cgen M g e1 >>=
+         fun '(t1,M1,C1) =>
+           cgen M1 g e2 >>=
+                fun '(t2,M2,C2) =>
+                  cgen M2 g e3 >>|
+                       fun '(t3,M3,C3) =>
+                         (t2, M3,
+                          (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)%set
+  | Op o e1 e2 =>
+    let (t,t') := typs_of_op o in
+    cgen M g e1 >>=
+         fun '(t1,M1,C1) =>
+           cgen M1 g e2 >>|
+                fun '(t2,M2,C2) =>
+                  (t', M2, (t,t1) :: (t,t2) :: C1 ++ C2)
+  end.
+
+Function unify
+         (C : list (typ * typ))
+         {measure C_size_vars C} : option tenv :=
   match C with
   | [] => Some ∅%env
   | (l, r) :: C =>
@@ -258,3 +295,173 @@ Proof.
   - intros. admit.
   - intros. admit.
 Abort.
+
+Section CompSound.
+  Local Hint Constructors op_typs : core.
+  
+  Lemma typs_of_op_sound : forall o t t',
+      typs_of_op o = (t,t') -> op_typs o t t'.
+  Proof.
+    intros [] ? ? H; simpl in *;
+      symmetry in H; inv H; auto.
+  Qed.
+
+  Lemma typs_of_op_complete : forall o t t',
+      op_typs o t t' -> typs_of_op o = (t,t').
+  Proof.
+    intros o t t' H; inv H; simpl; reflexivity.
+  Qed.
+
+  Local Hint Constructors constraint_typing : core.
+
+  Lemma cgen_M : forall e g t M M' C,
+      cgen M g e = Some (t,M',C) ->
+      M <= M'.
+  Proof.
+    intro e;
+      induction e as
+        [ x
+        | x e IHe
+        | e1 IHe1 e2 IHe2
+        | b | n
+        | e1 IHe1 e2 IHe2 e3 IHe3
+        | o e1 IHe1 e2 IHe2 ]; intros g t M M' C Hgen;
+        simpl in *; maybe_simpl_hyp Hgen.
+    - destruct (g x) as [tg |] eqn:Hgxeq; inv Hgen; lia.
+    - destruct (cgen (S M) (x ↦ TVar M;; g)%env e)
+        as [[[t' Me] C'] |] eqn:H; inv Hgen.
+      apply IHe in H. lia.
+    - destruct (cgen M g e1)
+        as [[[t1 M1] C1] |] eqn:He1;
+        try discriminate.
+      destruct (cgen M1 g e2)
+        as [[[t2 M2] C2] |] eqn:He2; inv Hgen.
+      apply IHe1 in He1. apply IHe2 in He2. lia.
+    - inv Hgen. lia.
+    - inv Hgen. lia.
+    - destruct (cgen M g e1)
+        as [[[t1 M1] C1] |] eqn:He1;
+        try discriminate.
+      destruct (cgen M1 g e2)
+        as [[[t2 M2] C2] |] eqn:He2;
+        try discriminate.
+      destruct (cgen M2 g e3)
+        as [[[t3 M3] C3] |] eqn:He3; inv Hgen.
+      apply IHe1 in He1; apply IHe2 in He2;
+        apply IHe3 in He3; lia.
+    - destruct (typs_of_op o) as [to t']; simpl in *.
+      destruct (cgen M g e1)
+        as [[[t1 M1] C1] |] eqn:He1;
+        try discriminate.
+      destruct (cgen M1 g e2)
+        as [[[t2 M2] C2] |] eqn:He2; inv Hgen.
+      apply IHe1 in He1. apply IHe2 in He2. lia.
+  Qed.
+
+  Lemma succ_le : forall n m,
+      S n <= m -> exists o, m = S o.
+  Proof.
+    intros n [| m] HSnm; try lia; eauto.
+  Qed.
+
+  Local Hint Constructors Permutation : core.
+  Local Hint Resolve typs_of_op_sound : core.
+
+  Theorem cgen_sound : forall e g t M M' C,
+      cgen M g e = Some (t,M',C) ->
+      exists X, Permutation X (seq M (M' - M)) /\
+           g ⊢ e ∈ t ⊣ X @ C.
+  Proof.
+    intro e;
+      induction e as
+        [ x
+        | x e IHe
+        | e1 IHe1 e2 IHe2
+        | b | n
+        | e1 IHe1 e2 IHe2 e3 IHe3
+        | o e1 IHe1 e2 IHe2 ]; intros g t M M' C H;
+        simpl in *; maybe_simpl_hyp H.
+    - destruct (g x) as [t' |] eqn:Hgx;
+        simpl in *; inv H.
+      replace (M' - M') with 0 by lia. eauto.
+    - destruct (cgen (S M) (x ↦ TVar M;; g)%env e)
+        as [[[t' Me] C'] |] eqn:HeqIH; inv H.
+      apply IHe in HeqIH as IH.
+      destruct IH as [X [HP IH]].
+      apply cgen_M in HeqIH as HM.
+      apply succ_le in HM as HM'.
+      destruct HM' as [M'' HM'']; subst.
+      apply le_S_n in HM.
+      assert (Hm: exists M''', S M''' = S M'' - M).
+      { simpl.
+        clear x e IHe HeqIH IH g C t' HP X.
+        induction M as [| M IHM]; eauto.
+        destruct IHM as [Mx IHM]; try lia.
+        destruct M as [| M].
+        - inv IHM. exists (M'' - 1). lia.
+        - exists (Mx - 1). lia. }
+      destruct Hm as [M''' Hm]. rewrite <- Hm.
+      rewrite <- cons_seq. exists (M :: X).
+      replace M''' with (S M'' - S M) by lia.
+      split; eauto. constructor.
+      + intros HIn.
+        eapply Permutation_in in HP; eauto.
+        rewrite in_seq in HP. lia.
+      + simpl in IH.
+        rewrite <- Minus.minus_Sn_m in Hm by lia.
+        inv Hm. assumption.
+    - destruct (cgen M g e1)
+        as [[[t1 M1] C1] |] eqn:He1; try discriminate.
+      destruct (cgen M1 g e2)
+        as [[[t2 M2] C2] |] eqn:He2; inv H.
+      apply IHe1 in He1 as IH1;
+        destruct IH1 as [X1 [HP1 IH1]].
+      apply IHe2 in He2 as IH2;
+        destruct IH2 as [X2 [HP2 IH2]].
+      assert (HM2: M <= M2).
+      { apply cgen_M in He1.
+        apply cgen_M in He2. lia. }
+      rewrite <- Minus.minus_Sn_m by lia.
+      exists (M2 :: X1 ++ X2). split.
+      + (* tedious, mechanical proof. *) admit.
+      + constructor; auto.
+        * (* intersect helper lemma for [seq]. *) admit.
+        * (* helper lemma for [M] and [tvars] of [cgen] *) admit.
+        * (* helper lemma for [M] and [tvars] of [cgen] *) admit.
+        * repeat rewrite in_app_iff.
+          (* tedious, mechanical proof. *) admit.
+    - inv H. replace (M' - M') with 0 by lia; simpl; eauto.
+    - inv H. replace (M' - M') with 0 by lia; simpl; eauto.
+    - destruct (cgen M g e1)
+        as [[[t1 M1] C1] |] eqn:He1; try discriminate.
+      destruct (cgen M1 g e2)
+        as [[[t2 M2] C2] |] eqn:He2; try discriminate.
+      destruct (cgen M2 g e3)
+        as [[[t3 M3] C3] |] eqn:He3; inv H.
+      apply IHe1 in He1 as IH1;
+        destruct IH1 as [X1 [HP1 IH1]].
+      apply IHe2 in He2 as IH2;
+        destruct IH2 as [X2 [HP2 IH2]].
+      apply IHe3 in He3 as IH3;
+        destruct IH3 as [X3 [HP3 IH3]].
+      exists (X1 ∪ X2 ∪ X3)%set. split.
+      + (* tedious, mechanical proof. *) admit.
+      + constructor; auto.
+        * (* intersect helper lemma for [seq]. *) admit.
+        * (* intersect helper lemma for [seq]. *) admit.
+        * (* intersect helper lemma for [seq]. *) admit.
+    - destruct (typs_of_op o) as [to t'] eqn:Heqop.
+      destruct (cgen M g e1)
+        as [[[t1 M1] C1] |] eqn:He1; try discriminate.
+      destruct (cgen M1 g e2)
+        as [[[t2 M2] C2] |] eqn:He2; inv H.
+      apply IHe1 in He1 as IH1;
+        destruct IH1 as [X1 [HP1 IH1]].
+      apply IHe2 in He2 as IH2;
+        destruct IH2 as [X2 [HP2 IH2]].
+      exists (X1 ++ X2). split.
+      + (* tedious, mechanical proof. *) admit.
+      + constructor; auto.
+        (* intersect helper lemma for [seq]. *) admit.
+  Admitted.
+End CompSound.
