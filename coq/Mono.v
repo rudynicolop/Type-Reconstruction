@@ -389,7 +389,14 @@ Section CompSound.
 
   Local Hint Resolve cgen_M : core.
 
-  Lemma typs_of_op_tvars : forall o t t',
+  Lemma typs_of_op_tvars_l : forall o t t',
+      typs_of_op o = (t,t') -> tvars t = [].
+  Proof.
+    intros [] [] [] H; simpl in *;
+      try discriminate; reflexivity.
+  Qed.
+  
+  Lemma typs_of_op_tvars_r : forall o t t',
       typs_of_op o = (t,t') -> tvars t' = [].
   Proof.
     intros [] [] [] H; simpl in *;
@@ -414,10 +421,88 @@ Section CompSound.
              by solve_dumber Hg.
       pose proof IHe2 _ _ _ _ _ He2 Hg1 as IH2; clear IHe2 He2 Hg1.
       apply IH2 in HX; lia.
-    - apply typs_of_op_tvars in Hop;
-        rewrite Hop in HX; simpl in HX. contradiction.
+    - apply typs_of_op_tvars_r in Hop;
+        rewrite Hop in HX;
+        simpl in HX; contradiction.
+  Qed.
+
+  Local Hint Resolve cgen_tvars : core.
+
+  Lemma In_Ctvars_app : forall C1 C2 X,
+      In X (Ctvars (C1 ∪ C2)%set) <-> In X (Ctvars C1) \/ In X (Ctvars C2).
+  Proof.
+    intro C1; induction C1 as [| [l1 r2] C1 IHC1];
+      intros C2 X; simpl in *; intuition.
+    - repeat rewrite in_app_iff in *.
+      rewrite IHC1 in H. intuition.
+    - repeat rewrite in_app_iff in *.
+      rewrite IHC1. intuition.
+    - repeat rewrite in_app_iff.
+      rewrite IHC1. intuition.
   Qed.
   
+  Lemma cgen_Ctvars : forall e g t M M' C,
+      cgen M g e = Some (t,M',C) ->
+      (forall x tx, g x = Some tx ->
+               forall X, In X (tvars tx) -> X < M) ->
+      forall X, In X (Ctvars C) -> X < M'.
+  Proof.
+    cgen_ind; intros Hg X HX; eauto; simpl in *; try lia.
+    - eapply IHe in H; eauto; try solve_dumb x Hg.
+    - assert (M <= M1) by eauto.
+      assert (M1 <= M2) by eauto.
+      assert (M <= M2) by lia.
+      repeat rewrite in_app_iff in HX.
+      rewrite In_Ctvars_app in HX.
+      assert (Hg1: forall x tx,
+                 g x = Some tx ->
+                 forall X : nat, In X (tvars tx) -> X < M1)
+        by solve_dumber Hg.
+      pose proof IHe1 _ _ _ _ _ He1 Hg  X as IH1; clear IHe1.
+      pose proof IHe2 _ _ _ _ _ He2 Hg1 X as IH2; clear IHe2.
+      pose proof cgen_tvars _ _ _ _ _ _ He1 Hg  X as Ht1.
+      pose proof cgen_tvars _ _ _ _ _ _ He2 Hg1 X as Ht2.
+      intuition; simpl in *; try lia.
+    - assert (M <= M1) by eauto.
+      assert (M1 <= M2) by eauto.
+      assert (M2 <= M') by eauto.
+      assert (M <= M') by lia.
+      repeat rewrite in_app_iff in HX.
+      repeat rewrite In_Ctvars_app in HX.
+      assert (Hg1: forall x tx,
+                 g x = Some tx ->
+                 forall X : nat, In X (tvars tx) -> X < M1)
+        by solve_dumber Hg.
+      assert (Hg2: forall x tx,
+                 g x = Some tx ->
+                 forall X : nat, In X (tvars tx) -> X < M2)
+        by solve_dumber Hg.
+      pose proof IHe1 _ _ _ _ _ He1 Hg  X as IH1; clear IHe1.
+      pose proof IHe2 _ _ _ _ _ He2 Hg1 X as IH2; clear IHe2.
+      pose proof IHe3 _ _ _ _ _ He3 Hg2 X as IH3; clear IHe3.
+      pose proof cgen_tvars _ _ _ _ _ _ He1 Hg  X as Ht1.
+      pose proof cgen_tvars _ _ _ _ _ _ He2 Hg1 X as Ht2.
+      pose proof cgen_tvars _ _ _ _ _ _ He3 Hg2 X as Ht3.
+      intuition; simpl in *; try lia.
+    - assert (M <= M1) by eauto.
+      assert (M1 <= M') by eauto.
+      assert (M <= M') by lia.
+      apply typs_of_op_tvars_l in Hop.
+      rewrite Hop in HX; simpl in *.
+      repeat rewrite in_app_iff in HX.
+      rewrite In_Ctvars_app in HX.
+      assert (Hg1: forall x tx,
+                 g x = Some tx ->
+                 forall X : nat, In X (tvars tx) -> X < M1)
+        by solve_dumber Hg.
+      pose proof IHe1 _ _ _ _ _ He1 Hg  X as IH1; clear IHe1.
+      pose proof IHe2 _ _ _ _ _ He2 Hg1 X as IH2; clear IHe2.
+      pose proof cgen_tvars _ _ _ _ _ _ He1 Hg  X as Ht1.
+      pose proof cgen_tvars _ _ _ _ _ _ He2 Hg1 X as Ht2.
+      intuition; simpl in *; try lia.
+  Qed.
+
+  Local Hint Resolve cgen_Ctvars : core.
   Local Hint Constructors Permutation : core.
   Local Hint Resolve Permutation_app : core.
   Local Hint Resolve Permutation_cons_append : core.
@@ -461,9 +546,9 @@ Section CompSound.
       + simpl in IH.
         rewrite <- Minus.minus_Sn_m in Hm by lia.
         inv Hm. assumption.
-    - assert (HM1: M <= M1) by eauto.
-      assert (HM12: M1 <= M2) by eauto.
-      assert (HM2: M <= M2) by lia.
+    - assert (M <= M1) by eauto.
+      assert (M1 <= M2) by eauto.
+      assert (M <= M2) by lia.
       apply IHe1 in He1 as IH1; eauto;
         destruct IH1 as [X1 [HP1 IH1]].
       apply IHe2 in He2 as IH2; try solve_dumber Hg;
@@ -472,9 +557,8 @@ Section CompSound.
       exists (M2 :: X1 ++ X2). split.
       + rewrite seq_S; simpl.
         replace (M + (M2 - M)) with M2 by lia.
-        replace M2 with (M2 - M1 + M1) at 2 by lia.
-        rewrite <- Nat.add_sub_assoc by lia.
-        rewrite Nat.add_comm. rewrite seq_app.
+        replace (M2 - M) with ((M1 - M) + (M2 - M1)) by lia.
+        rewrite seq_app.
         replace (M + (M1 - M)) with M1 by lia; eauto.
       + constructor; auto.
         * (* intersect helper lemma for [seq]. *) admit.
@@ -482,19 +566,20 @@ Section CompSound.
         * (* helper lemma for [M] and [tvars] of [cgen] *) admit.
         * repeat rewrite in_app_iff.
           intros [HX1 | [HX2 | [Ht1 | [Ht2 | [HC1 | HC2]]]]].
-          -- assert (H: In M2 (seq M (M1 - M))) by eauto.
-             rewrite in_seq in H; lia.
-          -- assert (H: In M2 (seq M1 (M2 - M1))) by eauto.
-             rewrite in_seq in H; lia.
+          -- assert (H': In M2 (seq M (M1 - M))) by eauto.
+             rewrite in_seq in H'; lia.
+          -- assert (H': In M2 (seq M1 (M2 - M1))) by eauto.
+             rewrite in_seq in H'; lia.
           -- eapply cgen_tvars in He1; eauto; lia.
           -- eapply cgen_tvars in He2; eauto;
                try solve_dumber Hg; lia.
-          -- (* Ctvars helper lemma. *) admit.
-          -- (* Ctvars helper lemma. *) admit.
-    - assert (HM1: M <= M1) by eauto.
-      assert (HM12: M1 <= M2) by eauto.
-      assert (HM23: M2 <= M') by eauto.
-      assert (HM2: M <= M') by lia.
+          -- eapply cgen_Ctvars in He1; eauto; lia.
+          -- eapply cgen_Ctvars in He2; eauto;
+               try solve_dumber Hg; lia.
+    - assert (M <= M1) by eauto.
+      assert (M1 <= M2) by eauto.
+      assert (M2 <= M') by eauto.
+      assert (M <= M') by lia.
       apply IHe1 in He1 as IH1; eauto;
         destruct IH1 as [X1 [HP1 IH1]].
       apply IHe2 in He2 as IH2; try solve_dumber Hg;
@@ -502,20 +587,26 @@ Section CompSound.
       apply IHe3 in He3 as IH3; try solve_dumber Hg;
         destruct IH3 as [X3 [HP3 IH3]].
       exists (X1 ∪ X2 ∪ X3)%set. split.
-      + (* tedious, mechanical proof. *) admit.
+      + replace (M' - M) with
+            ((M1 - M) + (M2 - M1) + (M' - M2)) by lia.
+        repeat rewrite seq_app.
+        replace (M + (M1 - M)) with M1 by lia.
+        replace (M + (M1 - M + (M2 - M1))) with M2 by lia. eauto.
       + constructor; auto.
         * (* intersect helper lemma for [seq]. *) admit.
         * (* intersect helper lemma for [seq]. *) admit.
         * (* intersect helper lemma for [seq]. *) admit.
-    - assert (HM1: M <= M1) by eauto.
-      assert (HM1': M1 <= M') by eauto.
-      assert (HM': M <= M) by lia.
+    - assert (M <= M1) by eauto.
+      assert (M1 <= M') by eauto.
+      assert (M <= M) by lia.
       apply IHe1 in He1 as IH1; eauto;
         destruct IH1 as [X1 [HP1 IH1]].
       apply IHe2 in He2 as IH2; try solve_dumber Hg;
         destruct IH2 as [X2 [HP2 IH2]].
       exists (X1 ++ X2). split.
-      + (* tedious, mechanical proof. *) admit.
+      + replace (M' - M) with ((M1 - M) + (M' - M1)) by lia.
+        rewrite seq_app.
+        replace (M + (M1 - M)) with M1 by lia. eauto.
       + constructor; auto.
         (* intersect helper lemma for [seq]. *) admit.
   Admitted.
