@@ -9,38 +9,39 @@ Definition typs_of_op (o : op) : typ * typ :=
   | Eq  | Lt  => (TNat,  TBool)
   end.
 
-Fixpoint cgen (M : nat) (g : gamma) (e : term)
-  : option (typ * nat * list (typ * typ)) :=
+Fixpoint cgen (fresh : nat) (g : gamma) (e : term)
+  : option (typ * list nat * list (typ * typ)) :=
   match e with
-  | Bool _ => Some (TBool,M,[])
-  | Nat _  => Some (TNat,M,[])
-  | Var x  => t ↤ g x;; (t,M,[])
+  | Bool _ => Some (TBool,[],[])
+  | Nat _  => Some (TNat,[],[])
+  | Var x  => t ↤ g x;; (t,[],[])
   | (λ x ⇒ e)%term =>
-    cgen (S M) (x ↦ TVar M;; g)%env e >>|
-         fun '(t,X,C) => ((TVar M → t)%typ, X, C)
+    cgen (S fresh) (x ↦ TVar fresh;; g)%env e >>|
+         fun '(t,X,C) => ((TVar fresh → t)%typ, fresh :: X, C)
   | (e1 ⋅ e2)%term =>
-    cgen M g e1 >>=
-         fun '(t1,M1,C1) =>
-           cgen M1 g e2 >>|
-                fun '(t2,M2,C2) =>
-                  (TVar M2, S M2,
-                   (t1,(t2 → TVar M2)%typ) :: C1 ++ C2)
+    cgen fresh g e1 >>=
+         fun '(t1,X1,C1) =>
+           cgen (1 + list_max X1) g e2 >>|
+                fun '(t2,X2,C2) =>
+                  let T := 1 + list_max X2 in
+                  (TVar T, T :: X1 ++ X2,
+                   (t1,(t2 → TVar T)%typ) :: C1 ++ C2)
   | Cond e1 e2 e3 =>
-    cgen M g e1 >>=
-         fun '(t1,M1,C1) =>
-           cgen M1 g e2 >>=
-                fun '(t2,M2,C2) =>
-                  cgen M2 g e3 >>|
-                       fun '(t3,M3,C3) =>
-                         (t2, M3,
+    cgen fresh g e1 >>=
+         fun '(t1,X1,C1) =>
+           cgen (1 + list_max X1) g e2 >>=
+                fun '(t2,X2,C2) =>
+                  cgen (1 + list_max X2) g e3 >>|
+                       fun '(t3,X3,C3) =>
+                         (t2, X1 ∪ X2 ∪ X3,
                           (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)%set
   | Op o e1 e2 =>
     let (t,t') := typs_of_op o in
-    cgen M g e1 >>=
-         fun '(t1,M1,C1) =>
-           cgen M1 g e2 >>|
-                fun '(t2,M2,C2) =>
-                  (t', M2, (t,t1) :: (t,t2) :: C1 ++ C2)
+    cgen fresh g e1 >>=
+         fun '(t1,X1,C1) =>
+           cgen (1 + list_max X1) g e2 >>|
+                fun '(t2,X2,C2) =>
+                  (t', X1 ++ X2, (t,t1) :: (t,t2) :: C1 ++ C2)
   end.
 
 Section CGEN.
@@ -59,18 +60,30 @@ Section CGEN.
     intros o t t' H; inv H; simpl; reflexivity.
   Qed.
 
-  Local Hint Constructors constraint_typing : core.
-
   Lemma succ_le : forall n m,
       S n <= m -> exists o, m = S o.
   Proof.
     intros n [| m] HSnm; try lia; eauto.
   Qed.
   
+  Local Hint Constructors constraint_typing : core.
+
+  Ltac cgen_simpl :=
+    match goal with
+      | H: (match cgen ?F ?g ?e with
+            | Some _ => _
+            | None => _
+            end = Some (_,_,_))
+        |- _
+        => destruct (cgen F g e)
+          as [[[? ?] ?] |] eqn:?; simpl in *;
+          try discriminate
+    end.
+  
   Ltac cgen_ind :=
     match goal with
-    | |- forall e g t M M' C,
-        cgen M g e = Some (t,M',C) -> _
+    | |- forall e F g t X C,
+        cgen F g e = Some (t,X,C) -> _
       => intro e;
       induction e as
         [ x
@@ -78,36 +91,23 @@ Section CGEN.
         | e1 IHe1 e2 IHe2
         | b | n
         | e1 IHe1 e2 IHe2 e3 IHe3
-        | o e1 IHe1 e2 IHe2 ]; intros g t M M' C Hgen;
+        | o e1 IHe1 e2 IHe2 ]; intros F g t X C Hgen;
       simpl in *; maybe_simpl_hyp Hgen;
       (* var *)
-      [ destruct (g x) as [tg |] eqn:Hgxeq; inv Hgen
+      [ destruct (g x) as [tg |] eqn:Hgxeq
       (* abs *)
-      | destruct (cgen (S M) (x ↦ TVar M;; g)%env e)
-        as [[[t' Me] C'] |] eqn:H; inv Hgen
+      | cgen_simpl
       (* app *)
-      | destruct (cgen M g e1)
-        as [[[t1 M1] C1] |] eqn:He1;
-        try discriminate;
-        destruct (cgen M1 g e2)
-          as [[[t2 M2] C2] |] eqn:He2; inv Hgen
+      | repeat cgen_simpl
       (* bool *)
-      | inv Hgen
+      | idtac
       (* nat *)
-      | inv Hgen
+      | idtac
       (* cond *)
-      | destruct (cgen M g e1)
-        as [[[t1 M1] C1] |] eqn:He1; try discriminate;
-        destruct (cgen M1 g e2)
-          as [[[t2 M2] C2] |] eqn:He2; try discriminate;
-        destruct (cgen M2 g e3)
-          as [[[t3 M3] C3] |] eqn:He3; inv Hgen
+      | repeat cgen_simpl
       (* op *)
-      | destruct (typs_of_op o) as [to t'] eqn:Hop; simpl in *;
-        destruct (cgen M g e1)
-          as [[[t1 M1] C1] |] eqn:He1; try discriminate;
-        destruct (cgen M1 g e2)
-          as [[[t2 M2] C2] |] eqn:He2; inv Hgen ]
+      | destruct (typs_of_op o) as [to t'] eqn:Hop;
+        simpl in *; repeat cgen_simpl ]; inv Hgen
     end.
 
   Ltac solve_dumb x Hg :=
@@ -122,19 +122,26 @@ Section CGEN.
   Ltac solve_dumber Hg :=
     intros y ty Hgy Y HY; eapply Hg in Hgy; eauto; lia.
   
-  Lemma cgen_M : forall e g t M M' C,
-      cgen M g e = Some (t,M',C) ->
-      M <= M'.
+  Lemma cgen_M : forall e F g t X C,
+      cgen F g e = Some (t,X,C) ->
+      forall T, In T X -> F <= T.
   Proof.
-    cgen_ind; try lia.
+    cgen_ind; simpl; try contradiction; intuition; subst; try lia.
+    - eapply IHe in Heqo; eauto; lia.
+    (*- pose proof In_dec
+      eapply IHe1 in Heqo as IH1; eauto.
+      
+    - destruct (g x) as [tx |] eqn:Hgeq; inv Hgen; simpl; intuition.
+    - 
     - apply IHe in H; lia.
     - apply IHe1 in He1; apply IHe2 in He2; lia.
     - apply IHe1 in He1; apply IHe2 in He2;
         apply IHe3 in He3; lia.
     - apply IHe1 in He1; apply IHe2 in He2; lia.
-  Qed.
+    Qed.*)
+  Abort.
 
-  Local Hint Resolve cgen_M : core.
+  (*Local Hint Resolve cgen_M : core.*)
 
   Lemma typs_of_op_tvars_l : forall o t t',
       typs_of_op o = (t,t') -> tvars t = [].
@@ -150,7 +157,7 @@ Section CGEN.
       try discriminate; reflexivity.
   Qed.
   
-  Lemma cgen_tvars : forall e g t M M' C,
+  (*Lemma cgen_tvars : forall e g t M M' C,
       cgen M g e = Some (t,M',C) ->
       (forall x tx, g x = Some tx ->
                forall X, In X (tvars tx) -> X < M) ->
@@ -391,7 +398,7 @@ Section CGEN.
         unfold Intersection; simpl.
         intros a; split; try contradiction.
         repeat rewrite in_seq; lia.
-  Admitted.
+        Admitted.*)    
 End CGEN.
 
 Function unify
