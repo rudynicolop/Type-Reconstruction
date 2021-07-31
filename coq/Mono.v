@@ -314,11 +314,17 @@ Section CompSound.
 
   Local Hint Constructors constraint_typing : core.
 
-  Lemma cgen_M : forall e g t M M' C,
-      cgen M g e = Some (t,M',C) ->
-      M <= M'.
+  Lemma succ_le : forall n m,
+      S n <= m -> exists o, m = S o.
   Proof.
-    intro e;
+    intros n [| m] HSnm; try lia; eauto.
+  Qed.
+  
+  Ltac cgen_ind :=
+    match goal with
+    | |- forall e g t M M' C,
+        cgen M g e = Some (t,M',C) -> _
+      => intro e;
       induction e as
         [ x
         | x e IHe
@@ -326,75 +332,120 @@ Section CompSound.
         | b | n
         | e1 IHe1 e2 IHe2 e3 IHe3
         | o e1 IHe1 e2 IHe2 ]; intros g t M M' C Hgen;
-        simpl in *; maybe_simpl_hyp Hgen.
-    - destruct (g x) as [tg |] eqn:Hgxeq; inv Hgen; lia.
-    - destruct (cgen (S M) (x ↦ TVar M;; g)%env e)
-        as [[[t' Me] C'] |] eqn:H; inv Hgen.
-      apply IHe in H. lia.
-    - destruct (cgen M g e1)
+      simpl in *; maybe_simpl_hyp Hgen;
+      (* var *)
+      [ destruct (g x) as [tg |] eqn:Hgxeq; inv Hgen
+      (* abs *)
+      | destruct (cgen (S M) (x ↦ TVar M;; g)%env e)
+        as [[[t' Me] C'] |] eqn:H; inv Hgen
+      (* app *)
+      | destruct (cgen M g e1)
         as [[[t1 M1] C1] |] eqn:He1;
-        try discriminate.
-      destruct (cgen M1 g e2)
-        as [[[t2 M2] C2] |] eqn:He2; inv Hgen.
-      apply IHe1 in He1. apply IHe2 in He2. lia.
-    - inv Hgen. lia.
-    - inv Hgen. lia.
-    - destruct (cgen M g e1)
-        as [[[t1 M1] C1] |] eqn:He1;
-        try discriminate.
-      destruct (cgen M1 g e2)
-        as [[[t2 M2] C2] |] eqn:He2;
-        try discriminate.
-      destruct (cgen M2 g e3)
-        as [[[t3 M3] C3] |] eqn:He3; inv Hgen.
-      apply IHe1 in He1; apply IHe2 in He2;
-        apply IHe3 in He3; lia.
-    - destruct (typs_of_op o) as [to t']; simpl in *.
-      destruct (cgen M g e1)
-        as [[[t1 M1] C1] |] eqn:He1;
-        try discriminate.
-      destruct (cgen M1 g e2)
-        as [[[t2 M2] C2] |] eqn:He2; inv Hgen.
-      apply IHe1 in He1. apply IHe2 in He2. lia.
-  Qed.
+        try discriminate;
+        destruct (cgen M1 g e2)
+          as [[[t2 M2] C2] |] eqn:He2; inv Hgen
+      (* bool *)
+      | inv Hgen
+      (* nat *)
+      | inv Hgen
+      (* cond *)
+      | destruct (cgen M g e1)
+        as [[[t1 M1] C1] |] eqn:He1; try discriminate;
+        destruct (cgen M1 g e2)
+          as [[[t2 M2] C2] |] eqn:He2; try discriminate;
+        destruct (cgen M2 g e3)
+          as [[[t3 M3] C3] |] eqn:He3; inv Hgen
+      (* op *)
+      | destruct (typs_of_op o) as [to t'] eqn:Hop; simpl in *;
+        destruct (cgen M g e1)
+          as [[[t1 M1] C1] |] eqn:He1; try discriminate;
+        destruct (cgen M1 g e2)
+          as [[[t2 M2] C2] |] eqn:He2; inv Hgen ]
+    end.
 
-  Lemma succ_le : forall n m,
-      S n <= m -> exists o, m = S o.
+  Ltac solve_dumb x Hg :=
+    intros y ty Hgy Y HY;
+    destruct (equiv_dec y x) as [Hxy | Hxy];
+    unfold equiv, complement in *; simpl in *; subst;
+    [ rewrite bind_sound in Hgy;
+      inv Hgy; simpl in *; lia
+    | rewrite bind_complete in Hgy by assumption;
+      eapply Hg in Hgy; eauto; assumption ].
+
+  Ltac solve_dumber Hg :=
+    intros y ty Hgy Y HY; eapply Hg in Hgy; eauto; lia.
+  
+  Lemma cgen_M : forall e g t M M' C,
+      cgen M g e = Some (t,M',C) ->
+      M <= M'.
   Proof.
-    intros n [| m] HSnm; try lia; eauto.
+    cgen_ind; try lia.
+    - apply IHe in H; lia.
+    - apply IHe1 in He1; apply IHe2 in He2; lia.
+    - apply IHe1 in He1; apply IHe2 in He2;
+        apply IHe3 in He3; lia.
+    - apply IHe1 in He1; apply IHe2 in He2; lia.
   Qed.
 
-  Local Hint Constructors Permutation : core.
-  Local Hint Resolve typs_of_op_sound : core.
+  Local Hint Resolve cgen_M : core.
 
+  Lemma typs_of_op_tvars : forall o t t',
+      typs_of_op o = (t,t') -> tvars t' = [].
+  Proof.
+    intros [] [] [] H; simpl in *;
+      try discriminate; reflexivity.
+  Qed.
+  
+  Lemma cgen_tvars : forall e g t M M' C,
+      cgen M g e = Some (t,M',C) ->
+      (forall x tx, g x = Some tx ->
+               forall X, In X (tvars tx) -> X < M) ->
+      forall X, In X (tvars t) -> X < M'.
+  Proof.
+    cgen_ind; intros Hg X HX; eauto; simpl in *; try lia.
+    - destruct HX as [HMX | HX]; subst; eauto.
+      eapply IHe in H; eauto; solve_dumb x Hg.
+    - assert (M <= M1) by eauto.
+      assert (M1 <= M2) by eauto.
+      assert (M2 <= M') by eauto.
+      assert (Hg1: forall x tx,
+                 g x = Some tx ->
+                 forall X : nat, In X (tvars tx) -> X < M1)
+             by solve_dumber Hg.
+      pose proof IHe2 _ _ _ _ _ He2 Hg1 as IH2; clear IHe2 He2 Hg1.
+      apply IH2 in HX; lia.
+    - apply typs_of_op_tvars in Hop;
+        rewrite Hop in HX; simpl in HX. contradiction.
+  Qed.
+  
+  Local Hint Constructors Permutation : core.
+  Local Hint Resolve Permutation_app : core.
+  Local Hint Resolve Permutation_cons_append : core.
+  Local Hint Resolve Permutation_in : core.
+  Local Hint Resolve Permutation_sym : core.
+  Local Hint Resolve typs_of_op_sound : core.
+  
   Theorem cgen_sound : forall e g t M M' C,
       cgen M g e = Some (t,M',C) ->
+      (forall x tx, g x = Some tx ->
+               forall X, In X (tvars tx) -> X < M) ->
       exists X, Permutation X (seq M (M' - M)) /\
            g ⊢ e ∈ t ⊣ X @ C.
   Proof.
-    intro e;
-      induction e as
-        [ x
-        | x e IHe
-        | e1 IHe1 e2 IHe2
-        | b | n
-        | e1 IHe1 e2 IHe2 e3 IHe3
-        | o e1 IHe1 e2 IHe2 ]; intros g t M M' C H;
-        simpl in *; maybe_simpl_hyp H.
-    - destruct (g x) as [t' |] eqn:Hgx;
-        simpl in *; inv H.
-      replace (M' - M') with 0 by lia. eauto.
-    - destruct (cgen (S M) (x ↦ TVar M;; g)%env e)
-        as [[[t' Me] C'] |] eqn:HeqIH; inv H.
-      apply IHe in HeqIH as IH.
+    cgen_ind; intros Hg;
+      try match goal with
+          | |- context [?n - ?n]
+            => replace (n - n) with 0 by lia
+          end; eauto.
+    - apply IHe in H as IH; try solve_dumb x Hg.
       destruct IH as [X [HP IH]].
-      apply cgen_M in HeqIH as HM.
+      apply cgen_M in H as HM.
       apply succ_le in HM as HM'.
       destruct HM' as [M'' HM'']; subst.
       apply le_S_n in HM.
       assert (Hm: exists M''', S M''' = S M'' - M).
       { simpl.
-        clear x e IHe HeqIH IH g C t' HP X.
+        clear Hg x e IHe H IH g C t' HP X.
         induction M as [| M IHM]; eauto.
         destruct IHM as [Mx IHM]; try lia.
         destruct M as [| M].
@@ -410,39 +461,45 @@ Section CompSound.
       + simpl in IH.
         rewrite <- Minus.minus_Sn_m in Hm by lia.
         inv Hm. assumption.
-    - destruct (cgen M g e1)
-        as [[[t1 M1] C1] |] eqn:He1; try discriminate.
-      destruct (cgen M1 g e2)
-        as [[[t2 M2] C2] |] eqn:He2; inv H.
-      apply IHe1 in He1 as IH1;
+    - assert (HM1: M <= M1) by eauto.
+      assert (HM12: M1 <= M2) by eauto.
+      assert (HM2: M <= M2) by lia.
+      apply IHe1 in He1 as IH1; eauto;
         destruct IH1 as [X1 [HP1 IH1]].
-      apply IHe2 in He2 as IH2;
+      apply IHe2 in He2 as IH2; try solve_dumber Hg;
         destruct IH2 as [X2 [HP2 IH2]].
-      assert (HM2: M <= M2).
-      { apply cgen_M in He1.
-        apply cgen_M in He2. lia. }
       rewrite <- Minus.minus_Sn_m by lia.
       exists (M2 :: X1 ++ X2). split.
-      + (* tedious, mechanical proof. *) admit.
+      + rewrite seq_S; simpl.
+        replace (M + (M2 - M)) with M2 by lia.
+        replace M2 with (M2 - M1 + M1) at 2 by lia.
+        rewrite <- Nat.add_sub_assoc by lia.
+        rewrite Nat.add_comm. rewrite seq_app.
+        replace (M + (M1 - M)) with M1 by lia; eauto.
       + constructor; auto.
         * (* intersect helper lemma for [seq]. *) admit.
         * (* helper lemma for [M] and [tvars] of [cgen] *) admit.
         * (* helper lemma for [M] and [tvars] of [cgen] *) admit.
         * repeat rewrite in_app_iff.
-          (* tedious, mechanical proof. *) admit.
-    - inv H. replace (M' - M') with 0 by lia; simpl; eauto.
-    - inv H. replace (M' - M') with 0 by lia; simpl; eauto.
-    - destruct (cgen M g e1)
-        as [[[t1 M1] C1] |] eqn:He1; try discriminate.
-      destruct (cgen M1 g e2)
-        as [[[t2 M2] C2] |] eqn:He2; try discriminate.
-      destruct (cgen M2 g e3)
-        as [[[t3 M3] C3] |] eqn:He3; inv H.
-      apply IHe1 in He1 as IH1;
+          intros [HX1 | [HX2 | [Ht1 | [Ht2 | [HC1 | HC2]]]]].
+          -- assert (H: In M2 (seq M (M1 - M))) by eauto.
+             rewrite in_seq in H; lia.
+          -- assert (H: In M2 (seq M1 (M2 - M1))) by eauto.
+             rewrite in_seq in H; lia.
+          -- eapply cgen_tvars in He1; eauto; lia.
+          -- eapply cgen_tvars in He2; eauto;
+               try solve_dumber Hg; lia.
+          -- (* Ctvars helper lemma. *) admit.
+          -- (* Ctvars helper lemma. *) admit.
+    - assert (HM1: M <= M1) by eauto.
+      assert (HM12: M1 <= M2) by eauto.
+      assert (HM23: M2 <= M') by eauto.
+      assert (HM2: M <= M') by lia.
+      apply IHe1 in He1 as IH1; eauto;
         destruct IH1 as [X1 [HP1 IH1]].
-      apply IHe2 in He2 as IH2;
+      apply IHe2 in He2 as IH2; try solve_dumber Hg;
         destruct IH2 as [X2 [HP2 IH2]].
-      apply IHe3 in He3 as IH3;
+      apply IHe3 in He3 as IH3; try solve_dumber Hg;
         destruct IH3 as [X3 [HP3 IH3]].
       exists (X1 ∪ X2 ∪ X3)%set. split.
       + (* tedious, mechanical proof. *) admit.
@@ -450,14 +507,12 @@ Section CompSound.
         * (* intersect helper lemma for [seq]. *) admit.
         * (* intersect helper lemma for [seq]. *) admit.
         * (* intersect helper lemma for [seq]. *) admit.
-    - destruct (typs_of_op o) as [to t'] eqn:Heqop.
-      destruct (cgen M g e1)
-        as [[[t1 M1] C1] |] eqn:He1; try discriminate.
-      destruct (cgen M1 g e2)
-        as [[[t2 M2] C2] |] eqn:He2; inv H.
-      apply IHe1 in He1 as IH1;
+    - assert (HM1: M <= M1) by eauto.
+      assert (HM1': M1 <= M') by eauto.
+      assert (HM': M <= M) by lia.
+      apply IHe1 in He1 as IH1; eauto;
         destruct IH1 as [X1 [HP1 IH1]].
-      apply IHe2 in He2 as IH2;
+      apply IHe2 in He2 as IH2; try solve_dumber Hg;
         destruct IH2 as [X2 [HP2 IH2]].
       exists (X1 ++ X2). split.
       + (* tedious, mechanical proof. *) admit.
