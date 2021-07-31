@@ -4,6 +4,7 @@ Base.v
 Env.v
 Maybe.v
 Mono.v
+MonoComp.v
 MonoCompleteness.v
 Sets.v
 Typ.v

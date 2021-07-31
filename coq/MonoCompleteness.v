@@ -39,7 +39,7 @@ Section Complete.
     - apply Subset_perm_l
         with (T :: tvars τ1 ∪ tvars τ2 ∪ Ctvars (C1 ∪ C2))%set.
       + rewrite <- app_assoc with (m := [T]); simpl.
-        apply Permutation_sym. rewrite app_assoc.
+        rewrite app_assoc.
         apply Permutation_middle.
       + apply Subset_cons. (** Dang. *) admit.
     - (** Same problem. *) admit.

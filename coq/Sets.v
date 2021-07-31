@@ -19,20 +19,18 @@ Section Sets.
     forall a, In a l -> In a r.
 
   Local Hint Unfold Subset : core.
+  Local Hint Resolve Permutation_in : core.
+  Local Hint Resolve Permutation_sym : core.
 
   Lemma Subset_perm_l : forall l l',
-      Permutation l' l ->
+      Permutation l l' ->
       forall r, Subset l r -> Subset l' r.
-  Proof.
-    eauto using Permutation_in.
-  Qed.
+  Proof. eauto. Qed.
 
   Lemma Subset_perm_r : forall r r',
       Permutation r r' ->
       forall l, Subset l r -> Subset l r'.
-  Proof.
-    eauto using Permutation_in.
-  Qed.
+  Proof. eauto. Qed.
   
   (** [u] is the union of [l] & [r]. *)
   Definition Union (l r u : list A) : Prop :=
@@ -42,16 +40,27 @@ Section Sets.
 
   Lemma Union_Subset_l : forall l r u,
       Union l r u -> Subset l u.
-  Proof.
-    firstorder.
-  Qed.
+  Proof. firstorder. Qed.
 
   Lemma Union_Subset_r : forall l r u,
       Union l r u -> Subset r u.
-  Proof.
-    firstorder.
-  Qed.
+  Proof. firstorder. Qed.
 
+  Lemma Union_perm_l : forall l l',
+      Permutation l l' ->
+      forall r u, Union l r u -> Union l' r u.
+  Proof. firstorder eauto. Qed.
+
+  Lemma Union_perm_r : forall r r',
+      Permutation r r' ->
+      forall l u, Union l r u -> Union l r' u.
+  Proof. firstorder eauto. Qed.
+
+  Lemma Union_perm_u : forall u u',
+      Permutation u u' ->
+      forall l r, Union l r u -> Union l r u'.
+  Proof. firstorder eauto. Qed.
+      
   (** [i] is the intersection of [l] & [r]. *)
   Definition Intersection (l r i : list A) : Prop :=
     forall a, In a i <-> In a l /\ In a r.
@@ -69,6 +78,26 @@ Section Sets.
   Proof.
     firstorder.
   Qed.
+
+  Lemma Inter_perm_l : forall l l',
+      Permutation l l' ->
+      forall r i, Intersection l r i -> Intersection l' r i.
+  Proof. firstorder eauto. Qed.
+
+  Lemma Inter_perm_r : forall r r',
+      Permutation r r' ->
+      forall l i, Intersection l r i -> Intersection l r' i.
+  Proof. firstorder eauto. Qed.
+
+  Lemma Intersection_perm_i : forall i i',
+      Permutation i i' ->
+      forall l r, Intersection l r i -> Intersection l r i'.
+  Proof.
+    autounfold with core.
+    intros i i' HP l r H a;
+      pose proof H a as [Hai  Halr];
+      split; eauto.
+  Qed.
   
   (** [d] is the diff of [l] & [r]. *)
   Definition Difference (l r d : list A) : Prop :=
@@ -80,6 +109,25 @@ Section Sets.
       Difference l r d -> Subset d l.
   Proof.
     firstorder.
+  Qed.
+
+  Lemma Diff_perm_l : forall l l',
+      Permutation l l' ->
+      forall r d, Difference l r d -> Difference l' r d.
+  Proof. firstorder eauto. Qed.
+
+  Lemma Diff_perm_r : forall r r',
+      Permutation r r' ->
+      forall l d, Difference l r d -> Difference l r' d.
+  Proof. firstorder eauto. Qed.
+
+  Lemma Diff_perm_u : forall d d',
+      Permutation d d' ->
+      forall l r, Difference l r d -> Difference l r d'.
+  Proof.
+    autounfold with core.
+    intros d d' HP l r HD a;
+      pose proof HD a as [Had Halr]; split; eauto.
   Qed.
   
   Lemma append_Union : forall l r, Union l r (l ++ r).
@@ -254,7 +302,7 @@ Section Sets.
       (if member h r then [h] else []) ++ intersect t r
     end.
 
-  Lemma Intersection_intersect : forall l r,
+  Lemma intersect_Intersection : forall l r,
       Intersection l r (intersect l r).
   Proof.
     unfold Intersection; intro l;
@@ -277,7 +325,7 @@ Section Sets.
       (if member h r then [] else [h]) ++ difference t r
     end.
 
-  Lemma Difference_difference : forall l r,
+  Lemma difference_Difference : forall l r,
       Difference l r (difference l r).
   Proof.
     unfold Difference; intro l;
@@ -304,8 +352,8 @@ Section Sets.
   Local Hint Resolve Inter_Subset_r : core.
   Local Hint Resolve Diff_Subset : core.
   Local Hint Resolve append_Union : core.
-  Local Hint Resolve Intersection_intersect : core.
-  Local Hint Resolve Difference_difference : core.
+  Local Hint Resolve intersect_Intersection : core.
+  Local Hint Resolve difference_Difference : core.
   
   Lemma Subset_union_l : forall l r, Subset l (l ++ r).
   Proof.
@@ -375,6 +423,23 @@ Section SubsetUnion.
     auto using Permutation_app_comm.
   Qed.
 End SubsetUnion.
+
+Section InterNil.
+  Open Scope set_scope.
+
+  Context {A : Set}.
+  Context {HEA: EqDec A eq}.
+  
+  Lemma Inter_nil : forall l r : list A,
+      Intersection l r [] -> l ∩ r = [].
+  Proof.
+    unfold Intersection.
+    intro l; induction l as [| a l IHl];
+      intros r H; simpl in *; eauto.
+    pose proof (In_member_reflects a r) as Har;
+      inv Har; simpl in *; firstorder.
+  Qed.
+End InterNil.
 
 Section NatSet.
   Local Hint Constructors Forall : core.
