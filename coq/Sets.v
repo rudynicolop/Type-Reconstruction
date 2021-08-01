@@ -454,6 +454,13 @@ Section NatSet.
     apply Forall_forall
       with (x:=n) in IHt; try assumption. lia.
   Qed.
+
+  Lemma list_max_ge_in : forall l n,
+      In n l -> n <= list_max l.
+  Proof.
+    intro l. rewrite <- Forall_forall.
+    exact (list_max_ge l).
+  Qed.
   
   Lemma list_max_succ : forall l : list nat,
     Forall (fun n => n < 1 + list_max l) l.
