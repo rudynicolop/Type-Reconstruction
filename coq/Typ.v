@@ -164,6 +164,20 @@ Section TSub.
     rewrite IHt1. rewrite IHt2. reflexivity.
   Qed.
 
+  Lemma tsub_not_in_tvars : forall t t' T s,
+      ~ In T (tvars t) ->
+      ((T ↦ t';; s)%env † t = s † t)%typ.
+  Proof.
+    intro t;
+      induction t as [| | t1 IHt1 t2 IHt2 | X];
+      intros t' T s HIn; simpl in *; auto.
+    - rewrite in_app_iff in HIn.
+      apply Decidable.not_or in HIn as [Ht1 Ht2].
+      rewrite IHt1,IHt2 by eauto. reflexivity.
+    - apply Decidable.not_or in HIn as [Ht _].
+      rewrite bind_complete by intuition. reflexivity.
+  Qed.
+  
   Lemma tsub_gamma_empty : forall g : gamma, (∅ × g = g)%env.
   Proof.
     intros g. extensionality n.
@@ -172,6 +186,19 @@ Section TSub.
     rewrite tsub_empty. reflexivity.
   Qed.
 
+  Lemma tsub_gamma_not_in_tvars : forall T t (g : gamma) (s : tenv),
+      (forall x tx, g x = Some tx -> ~ In T (tvars tx)) ->
+      ((T ↦ t;; s) × g = s × g)%env.
+  Proof.
+    intros T t g s Hg.
+    extensionality y.
+    repeat rewrite env_map_map.
+    maybe_simpl.
+    destruct (g y) as [ty |] eqn:Hgy; auto.
+    apply Hg in Hgy. f_equal.
+    apply tsub_not_in_tvars; auto.
+  Qed.
+  
   Lemma tsub_single_size : forall τ t X,
       ~ In X (tvars t) ->
       let s := (X ↦ t;; ∅)%env in

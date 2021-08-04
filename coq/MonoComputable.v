@@ -92,14 +92,6 @@ Section CGEN.
   Qed.
 
   Local Hint Resolve typs_of_op_sound : core.
-  
-  Lemma typs_of_op_complete : forall o t t',
-      op_typs o t t' -> typs_of_op o = (t,t').
-  Proof.
-    intros o t t' H; inv H; simpl; reflexivity.
-  Qed.
-
-  Local Hint Resolve typs_of_op_complete : core.
 
   Lemma typs_of_op_tvars_l : forall o t t',
       typs_of_op o = (t,t') -> tvars t = [].
@@ -113,12 +105,6 @@ Section CGEN.
   Proof.
     intros [] [] [] H; simpl in *;
       try discriminate; reflexivity.
-  Qed.
-  
-  Lemma succ_le : forall n m,
-      S n <= m -> exists o, m = S o.
-  Proof.
-    intros n [| m] HSnm; try lia; eauto.
   Qed.
   
   Local Hint Constructors constraint_typing : core.
@@ -654,6 +640,80 @@ Section CGEN.
     intros e t X C H.
     erewrite <- cgen_cgen' in H; eauto.
   Qed.
+
+  Lemma typs_of_op_complete : forall o t t',
+      op_typs o t t' -> typs_of_op o = (t,t').
+  Proof.
+    intros o t t' H; inv H; simpl; reflexivity.
+  Qed.
+  
+  Local Hint Resolve typs_of_op_complete : core.
+  Local Hint Resolve tsub_gamma_empty : core.
+  Local Hint Resolve tsub_empty : core.
+  
+  Lemma cgen_complete : forall Γ e τ X C,
+      Γ ⊢ e ∈ τ ⊣ X @ C ->
+      forall g σ,
+        (σ × g = Γ)%env ->
+        forall used,
+          (forall x tx, g x = Some tx -> (tvars tx) ⊆ used)%set ->
+          exists t X' C',
+            (σ † t = τ)%typ /\
+            Ctsub σ C' = C /\
+            cgen' used g e = Some (t,X',C').
+  Proof.
+    intros Γ e τ X C H;
+      induction H;
+      intros g s Hsg used Hused; simpl; maybe_simpl.
+    - exists TBool. exists []. exists [].
+      repeat split; simpl; auto.
+    - exists TNat. exists []. exists [].
+      repeat split; simpl; auto.
+    - unfold bound in H.
+      assert
+        (Ht': exists t', g x = Some t' /\ (s † t' = τ)%typ).
+      { rewrite <- Hsg in H.
+        rewrite env_map_map in H.
+        maybe_simpl_hyp H.
+        destruct (g x) as [tx |] eqn:gx;
+          simpl in *; inv H. eauto. }
+      destruct Ht' as [t' [Ht' Hst']].
+      exists t'. exists []. exists []. rewrite Ht'.
+      repeat split; auto.
+    - pose proof IHconstraint_typing
+           (x ↦ TVar (S (list_max used));; g)%env
+           ((S (list_max used)) ↦ TVar T;; s)%env as IH;
+        clear IHconstraint_typing.
+      assert
+        (Heq:
+           (S (list_max used) ↦ TVar T;;
+            s × x ↦ TVar (S (list_max used));; g)%env =
+           (x ↦ TVar T;; Γ)%env).
+      { rewrite <- env_map_bind; simpl.
+        rewrite bind_sound.
+        rewrite tsub_gamma_not_in_tvars.
+        - rewrite Hsg; reflexivity.
+        - intros y ty Hgy HIn.
+          apply Hused in Hgy.
+          apply Hgy in HIn.
+          apply list_max_ge_in in HIn. lia. }
+      pose proof IH Heq as IH'; clear IH;
+        rename IH' into IH.
+      specialize IH with (S (list_max used) :: used).
+      assert (Hy: forall y ty,
+                 (x ↦ TVar (S (list_max used));; g)%env y = Some ty ->
+                 (tvars ty ⊆ S (list_max used) :: used)%set)
+        by solve_dumb x Hused.
+      pose proof IH Hy as
+          (t' & X' & C' & Ht' & HC' & Hgen); clear IH Hy.
+      rewrite Hgen.
+      exists (TVar (S (list_max used)) → t')%typ.
+      exists (S (list_max used) :: X'). exists C'.
+      repeat split; auto.
+      + simpl. admit. (* Sudoku paradox. *)
+      + admit. (* Sudoku paradox. *)
+    - (* This is masochistic... *)
+  Abort.
 End CGEN.
 
 Function unify

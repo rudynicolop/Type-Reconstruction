@@ -1,6 +1,6 @@
 Require Export Coq.Classes.EquivDec
         Coq.Logic.FunctionalExtensionality
-        CoqRecon.Sets.
+        CoqRecon.Sets CoqRecon.Maybe.
 
 Section Env.
   Context {K V : Set}.
@@ -39,6 +39,13 @@ Section Env.
   Definition mask (e : env) (ks : list K) : env :=
     fun k => if member k ks then None else e k.
 
+  Definition shadow (e1 e2 : env) : env :=
+    fun k =>
+      match e1 k with
+      | Some v => Some v
+      | None => e2 k
+      end.
+  
   Definition dom (e : env) (d : list K) : Prop :=
     forall k, In k d <-> exists v, e k = Some v.
 
@@ -93,6 +100,15 @@ Section EnvMap.
     unfold bind, env_map.
     destruct (equiv_dec k a) as [Hka | Hka];
       unfold equiv in *; subst; reflexivity.
+  Qed.
+
+  Open Scope maybe_scope.
+  
+  Lemma env_map_map : forall e a,
+      env_map e a = e a >>| f.
+  Proof.
+    intros e a; unfold env_map;
+      maybe_simpl; reflexivity.
   Qed.
 End EnvMap.
 
