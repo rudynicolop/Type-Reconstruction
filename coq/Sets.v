@@ -1,7 +1,8 @@
 Require Export Coq.Classes.EquivDec
         Coq.Lists.List Coq.Bool.Bool
         Coq.Sorting.Permutation
-        CoqRecon.Base Coq.micromega.Lia.
+        CoqRecon.Base Coq.micromega.Lia
+        Coq.Arith.Compare_dec.
 Export ListNotations.
 
 Declare Scope set_scope.
@@ -402,6 +403,20 @@ Section SubsetUnion.
     unfold Subset; intros;
       simpl in *; intuition.
   Qed.
+
+  Lemma Subset_l_union : forall l r : list A,
+      l ⊆ r -> forall s, l ⊆ r ∪ s.
+  Proof.
+    unfold Subset; intros.
+    autorewrite with core in *; intuition.
+  Qed.
+
+  Lemma Subset_r_union : forall l r : list A,
+      l ⊆ r -> forall s, l ⊆ s ∪ r.
+  Proof.
+    unfold Subset; intros.
+    autorewrite with core in *; intuition.
+  Qed.
   
   Lemma Subset_union_distr_l : forall l r : list A,
       l ⊆ r -> forall s, s ∪ l ⊆ s ∪ r.
@@ -454,6 +469,13 @@ Section NatSet.
     apply Forall_forall
       with (x:=n) in IHt; try assumption. lia.
   Qed.
+
+  Lemma list_max_ge_in : forall l n,
+      In n l -> n <= list_max l.
+  Proof.
+    intro l. rewrite <- Forall_forall.
+    exact (list_max_ge l).
+  Qed.
   
   Lemma list_max_succ : forall l : list nat,
     Forall (fun n => n < 1 + list_max l) l.
@@ -474,5 +496,20 @@ Section NatSet.
          (fun n => n < 1 + list_max l) l as [HFF _].
     pose proof HFF H as H'.
     apply H' in HIn. lia.
+  Qed.
+
+  Open Scope set_scope.
+
+  Lemma Subset_list_max : forall l r,
+      l ⊆ r -> list_max l <= list_max r.
+  Proof.
+    unfold "⊆".
+    intro l; induction l as [| a l IHl];
+      intros r HS; simpl in *; try lia.
+    destruct (le_gt_dec a (list_max l)) as [Hal | Hal].
+    - rewrite max_r by lia; eauto.
+    - rewrite max_l by lia.
+      assert (Har: In a r) by eauto.
+      auto using list_max_ge_in.
   Qed.
 End NatSet.

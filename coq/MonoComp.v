@@ -1,4 +1,4 @@
-Require Export CoqRecon.Mono.
+Require Export CoqRecon.Mono Coq.Arith.Compare_dec.
 
 Open Scope maybe_scope.
 
@@ -9,38 +9,76 @@ Definition typs_of_op (o : op) : typ * typ :=
   | Eq  | Lt  => (TNat,  TBool)
   end.
 
-Fixpoint cgen (M : nat) (g : gamma) (e : term)
-  : option (typ * nat * list (typ * typ)) :=
+Fixpoint cgen (u used : list nat) (g : gamma) (e : term)
+  : option (typ * list nat * list (typ * typ)) :=
   match e with
-  | Bool _ => Some (TBool,M,[])
-  | Nat _  => Some (TNat,M,[])
-  | Var x  => t ↤ g x;; (t,M,[])
+  | Bool _ => Some (TBool,[],[])
+  | Nat _  => Some (TNat,[],[])
+  | Var x  => t ↤ g x;; (t,[],[])
   | (λ x ⇒ e)%term =>
-    cgen (S M) (x ↦ TVar M;; g)%env e >>|
-         fun '(t,X,C) => ((TVar M → t)%typ, X, C)
+    let F := 1 + list_max used in
+    cgen (F :: u) (F :: used) (x ↦ TVar F;; g)%env e >>|
+         fun '(t,X,C) => ((TVar F → t)%typ, F :: X, C)
   | (e1 ⋅ e2)%term =>
-    cgen M g e1 >>=
-         fun '(t1,M1,C1) =>
-           cgen M1 g e2 >>|
-                fun '(t2,M2,C2) =>
-                  (TVar M2, S M2,
-                   (t1,(t2 → TVar M2)%typ) :: C1 ++ C2)
+    cgen u used g e1 >>=
+         fun '(t1,X1,C1) =>
+           cgen u (used ++ X1) g e2 >>|
+                fun '(t2,X2,C2) =>
+                  let T := 1 + list_max (X1 ++ X2 ++ used) in
+                  (TVar T, T :: X1 ++ X2,
+                   (t1,(t2 → TVar T)%typ) :: C1 ++ C2)
   | Cond e1 e2 e3 =>
-    cgen M g e1 >>=
-         fun '(t1,M1,C1) =>
-           cgen M1 g e2 >>=
-                fun '(t2,M2,C2) =>
-                  cgen M2 g e3 >>|
-                       fun '(t3,M3,C3) =>
-                         (t2, M3,
+    cgen u used g e1 >>=
+         fun '(t1,X1,C1) =>
+           cgen u (used ++ X1) g e2 >>=
+                fun '(t2,X2,C2) =>
+                  cgen u (used ++ X1 ++ X2) g e3 >>|
+                       fun '(t3,X3,C3) =>
+                         (t2, X1 ∪ X2 ∪ X3,
                           (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)%set
   | Op o e1 e2 =>
     let (t,t') := typs_of_op o in
-    cgen M g e1 >>=
-         fun '(t1,M1,C1) =>
-           cgen M1 g e2 >>|
-                fun '(t2,M2,C2) =>
-                  (t', M2, (t,t1) :: (t,t2) :: C1 ++ C2)
+    cgen u used g e1 >>=
+         fun '(t1,X1,C1) =>
+           cgen u (used ++ X1) g e2 >>|
+                fun '(t2,X2,C2) =>
+                  (t', X1 ++ X2, (t,t1) :: (t,t2) :: C1 ++ C2)
+  end.
+
+Fixpoint cgen' (used : list nat) (g : gamma) (e : term)
+  : option (typ * list nat * list (typ * typ)) :=
+  match e with
+  | Bool _ => Some (TBool,[],[])
+  | Nat _  => Some (TNat,[],[])
+  | Var x  => t ↤ g x;; (t,[],[])
+  | (λ x ⇒ e)%term =>
+    let F := 1 + list_max used in
+    cgen' (F :: used) (x ↦ TVar F;; g)%env e >>|
+         fun '(t,X,C) => ((TVar F → t)%typ, F :: X, C)
+  | (e1 ⋅ e2)%term =>
+    cgen' used g e1 >>=
+         fun '(t1,X1,C1) =>
+           cgen' (used ++ X1) g e2 >>|
+                fun '(t2,X2,C2) =>
+                  let T := 1 + list_max (X1 ++ X2 ++ used) in
+                  (TVar T, T :: X1 ++ X2,
+                   (t1,(t2 → TVar T)%typ) :: C1 ++ C2)
+  | Cond e1 e2 e3 =>
+    cgen' used g e1 >>=
+         fun '(t1,X1,C1) =>
+           cgen' (used ++ X1) g e2 >>=
+                fun '(t2,X2,C2) =>
+                  cgen' (used ++ X1 ++ X2) g e3 >>|
+                       fun '(t3,X3,C3) =>
+                         (t2, X1 ∪ X2 ∪ X3,
+                          (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)%set
+  | Op o e1 e2 =>
+    let (t,t') := typs_of_op o in
+    cgen' used g e1 >>=
+         fun '(t1,X1,C1) =>
+           cgen' (used ++ X1) g e2 >>|
+                fun '(t2,X2,C2) =>
+                  (t', X1 ++ X2, (t,t1) :: (t,t2) :: C1 ++ C2)
   end.
 
 Section CGEN.
@@ -53,88 +91,15 @@ Section CGEN.
       symmetry in H; inv H; auto.
   Qed.
 
+  Local Hint Resolve typs_of_op_sound : core.
+  
   Lemma typs_of_op_complete : forall o t t',
       op_typs o t t' -> typs_of_op o = (t,t').
   Proof.
     intros o t t' H; inv H; simpl; reflexivity.
   Qed.
 
-  Local Hint Constructors constraint_typing : core.
-
-  Lemma succ_le : forall n m,
-      S n <= m -> exists o, m = S o.
-  Proof.
-    intros n [| m] HSnm; try lia; eauto.
-  Qed.
-  
-  Ltac cgen_ind :=
-    match goal with
-    | |- forall e g t M M' C,
-        cgen M g e = Some (t,M',C) -> _
-      => intro e;
-      induction e as
-        [ x
-        | x e IHe
-        | e1 IHe1 e2 IHe2
-        | b | n
-        | e1 IHe1 e2 IHe2 e3 IHe3
-        | o e1 IHe1 e2 IHe2 ]; intros g t M M' C Hgen;
-      simpl in *; maybe_simpl_hyp Hgen;
-      (* var *)
-      [ destruct (g x) as [tg |] eqn:Hgxeq; inv Hgen
-      (* abs *)
-      | destruct (cgen (S M) (x ↦ TVar M;; g)%env e)
-        as [[[t' Me] C'] |] eqn:H; inv Hgen
-      (* app *)
-      | destruct (cgen M g e1)
-        as [[[t1 M1] C1] |] eqn:He1;
-        try discriminate;
-        destruct (cgen M1 g e2)
-          as [[[t2 M2] C2] |] eqn:He2; inv Hgen
-      (* bool *)
-      | inv Hgen
-      (* nat *)
-      | inv Hgen
-      (* cond *)
-      | destruct (cgen M g e1)
-        as [[[t1 M1] C1] |] eqn:He1; try discriminate;
-        destruct (cgen M1 g e2)
-          as [[[t2 M2] C2] |] eqn:He2; try discriminate;
-        destruct (cgen M2 g e3)
-          as [[[t3 M3] C3] |] eqn:He3; inv Hgen
-      (* op *)
-      | destruct (typs_of_op o) as [to t'] eqn:Hop; simpl in *;
-        destruct (cgen M g e1)
-          as [[[t1 M1] C1] |] eqn:He1; try discriminate;
-        destruct (cgen M1 g e2)
-          as [[[t2 M2] C2] |] eqn:He2; inv Hgen ]
-    end.
-
-  Ltac solve_dumb x Hg :=
-    intros y ty Hgy Y HY;
-    destruct (equiv_dec y x) as [Hxy | Hxy];
-    unfold equiv, complement in *; simpl in *; subst;
-    [ rewrite bind_sound in Hgy;
-      inv Hgy; simpl in *; lia
-    | rewrite bind_complete in Hgy by assumption;
-      eapply Hg in Hgy; eauto; assumption ].
-
-  Ltac solve_dumber Hg :=
-    intros y ty Hgy Y HY; eapply Hg in Hgy; eauto; lia.
-  
-  Lemma cgen_M : forall e g t M M' C,
-      cgen M g e = Some (t,M',C) ->
-      M <= M'.
-  Proof.
-    cgen_ind; try lia.
-    - apply IHe in H; lia.
-    - apply IHe1 in He1; apply IHe2 in He2; lia.
-    - apply IHe1 in He1; apply IHe2 in He2;
-        apply IHe3 in He3; lia.
-    - apply IHe1 in He1; apply IHe2 in He2; lia.
-  Qed.
-
-  Local Hint Resolve cgen_M : core.
+  Local Hint Resolve typs_of_op_complete : core.
 
   Lemma typs_of_op_tvars_l : forall o t t',
       typs_of_op o = (t,t') -> tvars t = [].
@@ -150,27 +115,142 @@ Section CGEN.
       try discriminate; reflexivity.
   Qed.
   
-  Lemma cgen_tvars : forall e g t M M' C,
-      cgen M g e = Some (t,M',C) ->
-      (forall x tx, g x = Some tx ->
-               forall X, In X (tvars tx) -> X < M) ->
-      forall X, In X (tvars t) -> X < M'.
+  Lemma succ_le : forall n m,
+      S n <= m -> exists o, m = S o.
   Proof.
-    cgen_ind; intros Hg X HX; eauto; simpl in *; try lia.
-    - destruct HX as [HMX | HX]; subst; eauto.
-      eapply IHe in H; eauto; solve_dumb x Hg.
-    - assert (M <= M1) by eauto.
-      assert (M1 <= M2) by eauto.
-      assert (M2 <= M') by eauto.
-      assert (Hg1: forall x tx,
-                 g x = Some tx ->
-                 forall X : nat, In X (tvars tx) -> X < M1)
-             by solve_dumber Hg.
-      pose proof IHe2 _ _ _ _ _ He2 Hg1 as IH2; clear IHe2 He2 Hg1.
-      apply IH2 in HX; lia.
-    - apply typs_of_op_tvars_r in Hop;
-        rewrite Hop in HX;
-        simpl in HX; contradiction.
+    intros n [| m] HSnm; try lia; eauto.
+  Qed.
+  
+  Local Hint Constructors constraint_typing : core.
+
+  Ltac cgen_simpl :=
+    match goal with
+    | H: (match cgen ?u ?F ?g ?e with
+          | Some _ => _
+          | None => _
+          end = Some (_,_,_))
+      |- _
+      => destruct (cgen u F g e)
+        as [[[? ?] ?] |] eqn:?; simpl in *;
+        try discriminate
+    end.
+  
+  Ltac cgen_ind :=
+    match goal with
+    | |- forall e u used g t X C,
+        cgen u used g e = Some (t,X,C) -> _
+      => intro e;
+      induction e as
+        [ x
+        | x e IHe
+        | e1 IHe1 e2 IHe2
+        | b | n
+        | e1 IHe1 e2 IHe2 e3 IHe3
+        | o e1 IHe1 e2 IHe2 ]; intros u used g t X C Hgen;
+      simpl in *; maybe_simpl_hyp Hgen;
+      (* var *)
+      [ destruct (g x) as [tg |] eqn:Hgxeq
+      (* abs *)
+      | cgen_simpl
+      (* app *)
+      | repeat cgen_simpl
+      (* bool *)
+      | idtac
+      (* nat *)
+      | idtac
+      (* cond *)
+      | repeat cgen_simpl
+      (* op *)
+      | destruct (typs_of_op o) as [to t'] eqn:Hop;
+        simpl in *; repeat cgen_simpl ]; inv Hgen
+    end.
+
+  Ltac solve_dumb x Hg :=
+    intros y ty Hgy Y HY;
+    destruct (equiv_dec y x) as [Hxy | Hxy];
+    unfold equiv, complement in *; simpl in *; subst;
+    [ rewrite bind_sound in Hgy;
+      inv Hgy; simpl in *; lia
+    | rewrite bind_complete in Hgy by assumption;
+      eapply Hg in Hgy; eauto; assumption ].
+
+  Ltac solve_dumber Hg :=
+    intros y ty Hgy Y HY; eapply Hg in Hgy; eauto; lia.
+
+  Ltac solve_stupid :=
+    unfold "⊆"; intros; repeat rewrite in_app_iff; eauto.
+
+  Ltac solve_stupider :=
+    unfold "⊆" in *; intros; simpl in *; intuition; assumption.
+  
+  Local Hint Resolve list_max_ge_in : core.
+
+  Lemma cgen_used_X : forall e u used g t X C,
+      cgen u used g e = Some (t,X,C) ->
+      forall T, In T X -> list_max used < T.
+  Proof.
+    cgen_ind; intros T HX; simpl in *; try lia.
+    - destruct HX as [HX | HX]; subst; try lia.
+      eapply IHe with (T := T) in Heqo; eauto.
+      replace (list_max (S (list_max used) :: used))
+        with (list_max ([S (list_max used)] ++ used)) in Heqo by auto.
+      rewrite list_max_app in Heqo. lia.
+    - repeat rewrite list_max_app in HX.
+      rewrite in_app_iff in HX.
+      destruct HX as [HX | [HX | HX]]; subst; try lia.
+      + eapply IHe1 in Heqo; eauto.
+      + eapply IHe2 in Heqo0; eauto.
+        rewrite list_max_app in Heqo0; lia.
+    - repeat rewrite in_app_iff in HX.
+      destruct HX as [[HX | HX] | HX].
+      + eapply IHe1 in Heqo; eauto.
+      + eapply IHe2 in Heqo0; eauto.
+        rewrite list_max_app in Heqo0; lia.
+      + eapply IHe3 in Heqo1; eauto.
+        repeat rewrite list_max_app in Heqo1; lia.
+    - rewrite in_app_iff in HX.
+      destruct HX as [HX | HX]; subst; try lia.
+      + eapply IHe1 in Heqo0; eauto.
+      + eapply IHe2 in Heqo1; eauto.
+        rewrite list_max_app in Heqo1; lia.
+  Qed.
+
+  Local Hint Resolve cgen_used_X : core.
+  
+  Corollary cgen_used : forall e u used g t X C,
+      cgen u used g e = Some (t,X,C) ->
+      forall T, In T used -> ~ In T X.
+  Proof.
+    intros e u used g t X C Hgen T Hused HX.
+    pose proof cgen_used_X _ _ _ _ _ _ _ Hgen _ HX.
+    assert (T <= list_max used).
+    { pose proof list_max_ge used as HM.
+      rewrite Forall_forall in HM; eauto. }
+    lia.
+  Qed.
+
+  Local Hint Resolve cgen_used : core.
+  
+  Lemma cgen_tvars : forall e u used g t X C,
+      cgen u used g e = Some (t,X,C) ->
+      (u ⊆ used)%set ->
+      (forall x t, g x = Some t -> (tvars t ⊆ u)%set) ->
+      (tvars t ⊆ u ∪ X)%set.
+  Proof.
+    unfold "⊆".
+    cgen_ind; intros Hu Hg T HT; simpl in *;
+      repeat rewrite in_app_iff in *;
+      simpl in *; try lia; eauto.
+    - destruct HT as [HT | HT]; subst; auto.
+      eapply IHe in Heqo; eauto;
+        try solve_dumb x Hg; try solve_stupider.
+      simpl in Heqo. rewrite in_app_iff in Heqo.
+      intuition.
+    - eapply IHe2 in Heqo0; eauto; try solve_stupid.
+      repeat rewrite in_app_iff in Heqo0.
+      intuition.
+    - erewrite typs_of_op_tvars_r in HT; eauto.
+      simpl in HT; contradiction.
   Qed.
 
   Local Hint Resolve cgen_tvars : core.
@@ -179,219 +259,401 @@ Section CGEN.
       In X (Ctvars (C1 ∪ C2)%set) <-> In X (Ctvars C1) \/ In X (Ctvars C2).
   Proof.
     intro C1; induction C1 as [| [l1 r2] C1 IHC1];
-      intros C2 X; simpl in *; intuition.
-    - repeat rewrite in_app_iff in *.
-      rewrite IHC1 in H. intuition.
-    - repeat rewrite in_app_iff in *.
-      rewrite IHC1. intuition.
-    - repeat rewrite in_app_iff.
-      rewrite IHC1. intuition.
+      intros C2 X; simpl in *; intuition;
+        repeat rewrite in_app_iff in *;
+        rewrite IHC1 in *; intuition.
   Qed.
-  
-  Lemma cgen_Ctvars : forall e g t M M' C,
-      cgen M g e = Some (t,M',C) ->
-      (forall x tx, g x = Some tx ->
-               forall X, In X (tvars tx) -> X < M) ->
-      forall X, In X (Ctvars C) -> X < M'.
+
+  (** Invalid. *)
+  Lemma cgen_Ctvars_tvars : forall e u used g t X C,
+      cgen u used g e = Some (t,X,C) ->
+      (u ⊆ used)%set ->
+      (forall x t, g x = Some t -> (tvars t ⊆ u)%set) ->
+      (Ctvars C ⊆ tvars t)%set.
   Proof.
-    cgen_ind; intros Hg X HX; eauto; simpl in *; try lia.
-    - eapply IHe in H; eauto; try solve_dumb x Hg.
-    - assert (M <= M1) by eauto.
-      assert (M1 <= M2) by eauto.
-      assert (M <= M2) by lia.
-      repeat rewrite in_app_iff in HX.
-      rewrite In_Ctvars_app in HX.
-      assert (Hg1: forall x tx,
-                 g x = Some tx ->
-                 forall X : nat, In X (tvars tx) -> X < M1)
-        by solve_dumber Hg.
-      pose proof IHe1 _ _ _ _ _ He1 Hg  X as IH1; clear IHe1.
-      pose proof IHe2 _ _ _ _ _ He2 Hg1 X as IH2; clear IHe2.
-      pose proof cgen_tvars _ _ _ _ _ _ He1 Hg  X as Ht1.
-      pose proof cgen_tvars _ _ _ _ _ _ He2 Hg1 X as Ht2.
-      intuition; simpl in *; try lia.
-    - assert (M <= M1) by eauto.
-      assert (M1 <= M2) by eauto.
-      assert (M2 <= M') by eauto.
-      assert (M <= M') by lia.
-      repeat rewrite in_app_iff in HX.
-      repeat rewrite In_Ctvars_app in HX.
-      assert (Hg1: forall x tx,
-                 g x = Some tx ->
-                 forall X : nat, In X (tvars tx) -> X < M1)
-        by solve_dumber Hg.
-      assert (Hg2: forall x tx,
-                 g x = Some tx ->
-                 forall X : nat, In X (tvars tx) -> X < M2)
-        by solve_dumber Hg.
-      pose proof IHe1 _ _ _ _ _ He1 Hg  X as IH1; clear IHe1.
-      pose proof IHe2 _ _ _ _ _ He2 Hg1 X as IH2; clear IHe2.
-      pose proof IHe3 _ _ _ _ _ He3 Hg2 X as IH3; clear IHe3.
-      pose proof cgen_tvars _ _ _ _ _ _ He1 Hg  X as Ht1.
-      pose proof cgen_tvars _ _ _ _ _ _ He2 Hg1 X as Ht2.
-      pose proof cgen_tvars _ _ _ _ _ _ He3 Hg2 X as Ht3.
-      intuition; simpl in *; try lia.
-    - assert (M <= M1) by eauto.
-      assert (M1 <= M') by eauto.
-      assert (M <= M') by lia.
+  Abort.
+  
+  Lemma cgen_Ctvars : forall e u used g t X C,
+      cgen u used g e = Some (t,X,C) ->
+      (u ⊆ used)%set ->
+      (forall x t, g x = Some t -> (tvars t ⊆ u)%set) ->
+      (Ctvars C ⊆ u ∪ X)%set.
+  Proof.
+    unfold "⊆".
+    cgen_ind; intros Hu Hg T HT; simpl in *;
+      repeat rewrite in_app_iff in *;
+      simpl in *; try lia; eauto.
+    - eapply IHe in Heqo; eauto;
+        try solve_dumb x Hg; try solve_stupider.
+      rewrite in_app_iff in Heqo; simpl in *.
+      intuition.
+    - rewrite In_Ctvars_app in HT.
+      rewrite in_app_iff. intuition.
+      + eapply cgen_tvars in Heqo; unfold "⊆" in *; eauto.
+        apply Heqo in H.
+        rewrite in_app_iff in H. intuition.
+      + eapply cgen_tvars in Heqo0; eauto; unfold "⊆" in *;
+          try solve_stupid.
+        apply Heqo0 in H.
+        repeat rewrite in_app_iff in H. intuition.
+      + eapply IHe1 in Heqo; eauto.
+        rewrite in_app_iff in Heqo. intuition.
+      + eapply IHe2 in Heqo0; eauto; try solve_stupid.
+        repeat rewrite in_app_iff in Heqo0.
+        intuition.
+    - repeat rewrite In_Ctvars_app in HT.
+      intuition.
+      + eapply cgen_tvars in Heqo; eauto.
+        unfold "⊆" in *. apply Heqo in H.
+        rewrite in_app_iff in H.
+        intuition.
+      + eapply cgen_tvars in Heqo0; eauto; unfold "⊆" in *;
+          try solve_stupid.
+        apply Heqo0 in H0.
+        repeat rewrite in_app_iff in H0.
+        intuition.
+      + eapply cgen_tvars in Heqo1; eauto; unfold "⊆" in *;
+          try solve_stupid.
+        apply Heqo1 in H.
+        repeat rewrite in_app_iff in H.
+        intuition.
+      + eapply IHe1 in Heqo; eauto.
+        rewrite in_app_iff in Heqo.
+        intuition.
+      + eapply IHe2 in Heqo0; eauto; try solve_stupid.
+        repeat rewrite in_app_iff in Heqo0.
+        intuition.
+      + eapply IHe3 in Heqo1; eauto; try solve_stupid.
+        repeat rewrite in_app_iff in Heqo1.
+        intuition.
+    - rewrite In_Ctvars_app in HT.
       apply typs_of_op_tvars_l in Hop.
-      rewrite Hop in HX; simpl in *.
-      repeat rewrite in_app_iff in HX.
-      rewrite In_Ctvars_app in HX.
-      assert (Hg1: forall x tx,
-                 g x = Some tx ->
-                 forall X : nat, In X (tvars tx) -> X < M1)
-        by solve_dumber Hg.
-      pose proof IHe1 _ _ _ _ _ He1 Hg  X as IH1; clear IHe1.
-      pose proof IHe2 _ _ _ _ _ He2 Hg1 X as IH2; clear IHe2.
-      pose proof cgen_tvars _ _ _ _ _ _ He1 Hg  X as Ht1.
-      pose proof cgen_tvars _ _ _ _ _ _ He2 Hg1 X as Ht2.
-      intuition; simpl in *; try lia.
+      repeat rewrite Hop in HT; simpl in *.
+      intuition.
+      + eapply cgen_tvars in Heqo0; eauto.
+        apply Heqo0 in H0.
+        rewrite in_app_iff in H0.
+        intuition.
+      + eapply cgen_tvars in Heqo1; eauto; try solve_stupid.
+        apply Heqo1 in H0.
+        repeat rewrite in_app_iff in H0.
+        intuition.
+      + eapply IHe1 in Heqo0; eauto.
+        rewrite in_app_iff in Heqo0.
+        intuition.
+      + eapply IHe2 in Heqo1; eauto; try solve_stupid.
+        repeat rewrite in_app_iff in Heqo1.
+        intuition.
   Qed.
 
   Local Hint Resolve cgen_Ctvars : core.
-  Local Hint Constructors Permutation : core.
-  Local Hint Resolve Permutation_app : core.
-  Local Hint Resolve Permutation_cons_append : core.
-  Local Hint Resolve Permutation_in : core.
-  Local Hint Resolve Permutation_sym : core.
-  Local Hint Resolve typs_of_op_sound : core.
-  
-  Theorem cgen_sound : forall e g t M M' C,
-      cgen M g e = Some (t,M',C) ->
-      (forall x tx, g x = Some tx ->
-               forall X, In X (tvars tx) -> X < M) ->
-      exists X, Permutation X (seq M (M' - M)) /\
-           g ⊢ e ∈ t ⊣ X @ C.
+
+  Lemma list_max_cons : forall n l,
+      list_max (n :: l) = Nat.max n (list_max l).
   Proof.
-    cgen_ind; intros Hg;
-      try match goal with
-          | |- context [?n - ?n]
-            => replace (n - n) with 0 by lia
-          end; eauto.
-    - apply IHe in H as IH; try solve_dumb x Hg.
-      destruct IH as [X [HP IH]].
-      apply cgen_M in H as HM.
-      apply succ_le in HM as HM'.
-      destruct HM' as [M'' HM'']; subst.
-      apply le_S_n in HM.
-      assert (Hm: exists M''', S M''' = S M'' - M).
-      { simpl.
-        clear Hg x e IHe H IH g C t' HP X.
-        induction M as [| M IHM]; eauto.
-        destruct IHM as [Mx IHM]; try lia.
-        destruct M as [| M].
-        - inv IHM. exists (M'' - 1). lia.
-        - exists (Mx - 1). lia. }
-      destruct Hm as [M''' Hm]. rewrite <- Hm.
-      rewrite <- cons_seq. exists (M :: X).
-      replace M''' with (S M'' - S M) by lia.
-      split; eauto. constructor.
-      + intros HIn.
-        eapply Permutation_in in HP; eauto.
-        rewrite in_seq in HP. lia.
-      + simpl in IH.
-        rewrite <- Minus.minus_Sn_m in Hm by lia.
-        inv Hm. assumption.
-    - assert (M <= M1) by eauto.
-      assert (M1 <= M2) by eauto.
-      assert (M <= M2) by lia.
-      apply IHe1 in He1 as IH1; eauto;
-        destruct IH1 as [X1 [HP1 IH1]].
-      apply IHe2 in He2 as IH2; try solve_dumber Hg;
-        destruct IH2 as [X2 [HP2 IH2]].
-      rewrite <- Minus.minus_Sn_m by lia.
-      exists (M2 :: X1 ++ X2). split.
-      + rewrite seq_S; simpl.
-        replace (M + (M2 - M)) with M2 by lia.
-        replace (M2 - M) with ((M1 - M) + (M2 - M1)) by lia.
-        rewrite seq_app.
-        replace (M + (M1 - M)) with M1 by lia; eauto.
-      + constructor; auto.
-        * apply Inter_nil.
-          apply Inter_perm_r with (r := seq M1 (M2 - M1)); eauto.
-          apply Inter_perm_l with (l := seq M (M1 - M)); eauto.
-          unfold Intersection; simpl.
-          intros a; split; try contradiction.
-          repeat rewrite in_seq. lia.
-        * apply Inter_nil.
-          apply Inter_perm_l with (l := seq M (M1 - M)); eauto.
-          unfold Intersection; simpl.
-          intros a; split; try contradiction.
-          rewrite in_seq. intuition.
-          assert (a < M2) by lia. admit.
-        * apply Inter_nil.
-          apply Inter_perm_l with (l := seq M1 (M2 - M1)); eauto.
-          unfold Intersection; simpl.
-          intros a; split; try contradiction.
-          rewrite in_seq. intuition.
-          assert (a < M1) by eauto. lia.
-        * repeat rewrite in_app_iff.
-          intros [HX1 | [HX2 | [Ht1 | [Ht2 | [HC1 | HC2]]]]].
-          -- assert (H': In M2 (seq M (M1 - M))) by eauto.
-             rewrite in_seq in H'; lia.
-          -- assert (H': In M2 (seq M1 (M2 - M1))) by eauto.
-             rewrite in_seq in H'; lia.
-          -- eapply cgen_tvars in He1; eauto; lia.
-          -- eapply cgen_tvars in He2; eauto;
-               try solve_dumber Hg; lia.
-          -- eapply cgen_Ctvars in He1; eauto; lia.
-          -- eapply cgen_Ctvars in He2; eauto;
-               try solve_dumber Hg; lia.
-    - assert (M <= M1) by eauto.
-      assert (M1 <= M2) by eauto.
-      assert (M2 <= M') by eauto.
-      assert (M <= M') by lia.
-      apply IHe1 in He1 as IH1; eauto;
-        destruct IH1 as [X1 [HP1 IH1]].
-      apply IHe2 in He2 as IH2; try solve_dumber Hg;
-        destruct IH2 as [X2 [HP2 IH2]].
-      apply IHe3 in He3 as IH3; try solve_dumber Hg;
-        destruct IH3 as [X3 [HP3 IH3]].
-      exists (X1 ∪ X2 ∪ X3)%set. split.
-      + replace (M' - M) with
-            ((M1 - M) + (M2 - M1) + (M' - M2)) by lia.
-        repeat rewrite seq_app.
-        replace (M + (M1 - M)) with M1 by lia.
-        replace (M + (M1 - M + (M2 - M1))) with M2 by lia. eauto.
-      + constructor; auto.
-        * apply Inter_nil.
-          apply Inter_perm_r with (r := seq M1 (M2 - M1)); eauto.
-          apply Inter_perm_l with (l := seq M (M1 - M)); eauto.
-          unfold Intersection; simpl.
-          intros a; split; try contradiction.
-          repeat rewrite in_seq; lia.
-        * apply Inter_nil.
-          apply Inter_perm_r with (r := seq M2 (M' - M2)); eauto.
-          apply Inter_perm_l with (l := seq M (M1 - M)); eauto.
-          unfold Intersection; simpl.
-          intros a; split; try contradiction.
-          repeat rewrite in_seq; lia.
-        * apply Inter_nil.
-          apply Inter_perm_r with (r := seq M2 (M' - M2)); eauto.
-          apply Inter_perm_l with (l := seq M1 (M2 - M1)); eauto.
-          unfold Intersection; simpl.
-          intros a; split; try contradiction.
-          repeat rewrite in_seq; lia.
-    - assert (M <= M1) by eauto.
-      assert (M1 <= M') by eauto.
-      assert (M <= M) by lia.
-      apply IHe1 in He1 as IH1; eauto;
-        destruct IH1 as [X1 [HP1 IH1]].
-      apply IHe2 in He2 as IH2; try solve_dumber Hg;
-        destruct IH2 as [X2 [HP2 IH2]].
-      exists (X1 ++ X2). split.
-      + replace (M' - M) with ((M1 - M) + (M' - M1)) by lia.
-        rewrite seq_app.
-        replace (M + (M1 - M)) with M1 by lia. eauto.
-      + constructor; auto.
-        apply Inter_nil.
-        apply Inter_perm_r with (r := seq M1 (M' - M1)); eauto.
-        apply Inter_perm_l with (l := seq M (M1 - M)); eauto.
-        unfold Intersection; simpl.
-        intros a; split; try contradiction.
-        repeat rewrite in_seq; lia.
-  Admitted.
+    intros n l.
+    replace (n :: l) with ([n] ++ l) by reflexivity.
+    rewrite list_max_app; simpl; lia.
+  Qed.
+
+  Local Hint Resolve Subset_l_union : core.
+  Local Hint Resolve Subset_r_union : core.
+  
+  Theorem cgen_sound : forall e u used g t X C,
+      cgen u used g e = Some (t,X,C) ->
+      (u ⊆ used)%set ->
+      (forall x t, g x = Some t -> (tvars t ⊆ u)%set) ->
+      g ⊢ e ∈ t ⊣ X @ C.
+  Proof.
+    cgen_ind; intros Hu Hg; eauto.
+    - constructor; eauto.
+      + eapply cgen_used in Heqo; eauto; intuition.
+      + eapply IHe in Heqo; eauto;
+          try solve_stupider; try solve_dumb x Hg.
+    - constructor; eauto.
+      + apply Inter_nil; unfold Intersection.
+        simpl; intro T; split; try contradiction.
+        intros [HT1 HT2].
+        eapply cgen_used_X in Heqo as H1; eauto.
+        eapply cgen_used_X in Heqo0 as H2; eauto.
+        rewrite list_max_app in H2.
+        assert (T <= list_max l) by eauto; lia.
+      + apply Inter_nil; unfold Intersection.
+        simpl; intro T; split; try contradiction.
+        intros [HT1 HT2].
+        eapply cgen_used_X in Heqo as H1; eauto.
+        eapply cgen_tvars in Heqo0 as H2; eauto;
+          try solve_stupid.
+        apply H2 in HT2 as H'.
+        repeat rewrite in_app_iff in H'.
+        destruct H' as [H' | H'].
+        * eapply cgen_used in Heqo; eauto.
+        * eapply cgen_used_X in Heqo0 as H3; eauto.
+          rewrite list_max_app in H3.
+          apply list_max_ge_in in HT1. lia.
+      + apply Inter_nil; unfold Intersection.
+        simpl; intro T; split; try contradiction.
+        intros [HT1 HT2].
+        eapply cgen_tvars in Heqo as H1; eauto.
+        eapply cgen_used_X in Heqo0 as H2; eauto.
+        apply H1 in HT2 as H'.
+        rewrite in_app_iff in H'.
+        rewrite list_max_app in H2.
+        destruct H' as [H' | H'].
+        * eapply cgen_used in Heqo0; eauto.
+          rewrite in_app_iff. intuition.
+        * eapply cgen_used_X in Heqo as H3; eauto.
+          apply list_max_ge_in in H'. lia.
+      + repeat rewrite in_app_iff.
+        eapply cgen_tvars in Heqo as H1; eauto.
+        eapply cgen_tvars in Heqo0 as H2; eauto;
+          try solve_stupid.
+        repeat rewrite list_max_app.
+        assert (Hu_used : list_max u <= list_max used)
+          by auto using Subset_list_max.
+        intuition.
+        * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
+          -- rewrite max_r with (n:=list_max l1) in H0 by lia.
+             destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
+             ++ rewrite max_r in H0 by lia.
+                eapply cgen_used_X in Heqo; eauto.
+                eapply list_max_ge_in in H0; eauto. lia.
+             ++ rewrite max_l in H0 by lia.
+                eapply cgen_used_X in Heqo; eauto.
+                eapply list_max_ge_in in H0; eauto. lia.
+          -- rewrite max_l with (n:=list_max l1) in H0 by lia.
+             destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
+             ++ rewrite max_r in H0 by lia.
+                eapply cgen_used_X in Heqo; eauto.
+                eapply list_max_ge_in in H0; eauto. lia.
+             ++ rewrite max_l in H0 by lia.
+                eapply cgen_used_X in Heqo; eauto.
+                eapply list_max_ge_in in H0; eauto. lia.
+        * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
+          -- rewrite max_r with (n:=list_max l1) in H by lia.
+             destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
+             ++ rewrite max_r in H by lia.
+                eapply cgen_used_X in Heqo0; eauto.
+                eapply list_max_ge_in in H; eauto. lia.
+             ++ rewrite max_l in H by lia.
+                eapply cgen_used_X in Heqo0; eauto.
+                eapply list_max_ge_in in H; eauto. lia.
+          -- rewrite max_l with (n:=list_max l1) in H by lia.
+             destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
+             ++ rewrite max_r in H by lia.
+                eapply cgen_used_X in Heqo0; eauto.
+                eapply list_max_ge_in in H; eauto. lia.
+             ++ rewrite max_l in H by lia.
+                eapply cgen_used_X in Heqo0; eauto.
+                eapply list_max_ge_in in H; eauto. lia.
+        * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
+          -- rewrite max_r with (n:=list_max l1) in H0 by lia.
+             destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
+             ++ rewrite max_r in H0 by lia.
+                apply H1 in H0 as H'.
+                rewrite in_app_iff in H'.
+                eapply list_max_ge_in in H0; eauto.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+             ++ rewrite max_l in H0 by lia.
+                apply H1 in H0 as H'.
+                rewrite in_app_iff in H'.
+                eapply list_max_ge_in in H0; eauto.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+          -- rewrite max_l with (n:=list_max l1) in H0 by lia.
+             destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
+             ++ rewrite max_r in H0 by lia.
+                eapply H1 in H0 as H'; eauto.
+                eapply list_max_ge_in in H0; eauto.
+                rewrite in_app_iff in H'.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+             ++ rewrite max_l in H0 by lia.
+                eapply H1 in H0 as H'; eauto.
+                eapply list_max_ge_in in H0; eauto.
+                rewrite in_app_iff in H'.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+        * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
+          -- rewrite max_r with (n:=list_max l1) in H by lia.
+             destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
+             ++ rewrite max_r in H by lia.
+                apply H2 in H as H'.
+                rewrite in_app_iff in H'.
+                eapply list_max_ge_in in H; eauto.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+             ++ rewrite max_l in H by lia.
+                apply H2 in H as H'.
+                rewrite in_app_iff in H'.
+                eapply list_max_ge_in in H; eauto.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+          -- rewrite max_l with (n:=list_max l1) in H by lia.
+             destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
+             ++ rewrite max_r in H by lia.
+                eapply H2 in H as H'; eauto.
+                eapply list_max_ge_in in H; eauto.
+                rewrite in_app_iff in H'.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+             ++ rewrite max_l in H by lia.
+                eapply H2 in H as H'; eauto.
+                eapply list_max_ge_in in H; eauto.
+                rewrite in_app_iff in H'.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+        * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
+          -- rewrite max_r with (n:=list_max l1) in H0 by lia.
+             destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
+             ++ rewrite max_r in H0 by lia.
+                eapply cgen_Ctvars in Heqo as H'; eauto.
+                apply H' in H0 as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+             ++ rewrite max_l in H0 by lia.
+                eapply cgen_Ctvars in Heqo as H'; eauto.
+                eapply H' in H0 as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+          -- rewrite max_l with (n:=list_max l1) in H0 by lia.
+             destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
+             ++ rewrite max_r in H0 by lia.
+                eapply cgen_Ctvars in Heqo as H'; eauto.
+                eapply H' in H0 as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+             ++ rewrite max_l in H0 by lia.
+                eapply cgen_Ctvars in Heqo as H'; eauto.
+                eapply H' in H0 as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+        * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
+          -- rewrite max_r with (n:=list_max l1) in H0 by lia.
+             destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
+             ++ rewrite max_r in H0 by lia.
+                eapply cgen_Ctvars in Heqo0 as H'; eauto;
+                  try solve_stupid.
+                apply H' in H0 as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+             ++ rewrite max_l in H0 by lia.
+                eapply cgen_Ctvars in Heqo0 as H';
+                  eauto; try solve_stupid.
+                eapply H' in H0 as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+          -- rewrite max_l with (n:=list_max l1) in H0 by lia.
+             destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
+             ++ rewrite max_r in H0 by lia.
+                eapply cgen_Ctvars in Heqo0 as H';
+                  eauto; try solve_stupid.
+                eapply H' in H0 as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+             ++ rewrite max_l in H0 by lia.
+                eapply cgen_Ctvars in Heqo0 as H';
+                  eauto; try solve_stupid.
+                eapply H' in H0 as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+    - constructor; eauto;
+        apply Inter_nil; unfold Intersection;
+          simpl; intro T; split; try contradiction;
+            intros [HT1 Ht2].
+      + eapply cgen_used_X in Heqo as H1; eauto.
+        eapply cgen_used_X in Heqo0 as H2; eauto.
+        rewrite list_max_app in H2.
+        assert (T <= list_max l) by eauto; lia.
+      + eapply cgen_used_X in Heqo as H1; eauto.
+        eapply cgen_used_X in Heqo1 as H2; eauto.
+        repeat rewrite list_max_app in H2.
+        assert (T <= list_max l) by eauto; lia.
+      + eapply cgen_used_X in Heqo0 as H1; eauto.
+        eapply cgen_used_X in Heqo1 as H2; eauto.
+        repeat rewrite list_max_app in *.
+        assert (T <= list_max l1) by eauto; lia.
+    - constructor; eauto.
+      apply Inter_nil; unfold Intersection;
+          simpl; intro T; split; try contradiction;
+            intros [HT1 Ht2].
+      eapply cgen_used_X in Heqo0 as H1; eauto.
+        eapply cgen_used_X in Heqo1 as H2; eauto.
+        repeat rewrite list_max_app in *.
+        assert (T <= list_max l) by eauto; lia.
+  Qed.
+
+  Theorem cgen_sound_clean : forall e t X C,
+      cgen [] [] ∅%env e = Some (t,X,C) ->
+      ∅%env ⊢ e ∈ t ⊣ X @ C.
+  Proof.
+    intros e t X C H.
+    eapply cgen_sound; eauto.
+    - unfold "⊆"; simpl; intuition.
+    - intros x t'; unfold "∅"; try discriminate.
+  Qed.
+
+  Lemma cgen_cgen' : forall e u used g,
+      cgen u used g e = cgen' used g e.
+  Proof.
+    intro e;
+      induction e as
+        [ x
+        | x e IHe
+        | e1 IHe1 e2 IHe2
+        | b | n
+        | e1 IHe1 e2 IHe2 e3 IHe3
+        | o e1 IHe1 e2 IHe2 ]; intros u used g;
+        simpl in *; maybe_simpl; auto.
+    - rewrite IHe. reflexivity.
+    - rewrite IHe1.
+      destruct (cgen' used g e1) as [[[? ?] ?] |];
+        simpl; try reflexivity.
+      rewrite IHe2. reflexivity.
+    - rewrite IHe1.
+      destruct (cgen' used g e1) as [[[? ?] ?] |];
+        simpl; try reflexivity.
+      rewrite IHe2.
+      destruct (cgen' (used ∪ l)%set g e2) as [[[? ?] ?] |];
+        simpl; try reflexivity.
+      rewrite IHe3. reflexivity.
+    - destruct (typs_of_op o) as [? ?].
+      rewrite IHe1.
+      destruct (cgen' used g e1) as [[[? ?] ?] |];
+        simpl; try reflexivity.
+      rewrite IHe2. reflexivity.
+  Qed.
+
+  Local Hint Resolve cgen_sound : core.
+  Local Hint Resolve cgen_sound_clean : core.
+
+  Theorem cgen'_sound : forall e used g t X C,
+      cgen' used g e = Some (t,X,C) ->
+      (forall x t, g x = Some t -> (tvars t ⊆ used)%set) ->
+      g ⊢ e ∈ t ⊣ X @ C.
+  Proof.
+    intros e used g t X C H Hg.
+    rewrite <- cgen_cgen' with (u := used) in H.
+    eapply cgen_sound; eauto.
+    unfold "⊆"; simpl; auto.
+  Qed.
+
+  Theorem cgen'_sound_clean : forall e t X C,
+      cgen' [] ∅%env e = Some (t,X,C) ->
+      ∅%env ⊢ e ∈ t ⊣ X @ C.
+  Proof.
+    intros e t X C H.
+    erewrite <- cgen_cgen' in H; eauto.
+  Qed.
 End CGEN.
 
 Function unify
