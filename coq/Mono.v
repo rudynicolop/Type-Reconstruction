@@ -1,12 +1,6 @@
-Require Export Coq.Strings.String
-        Coq.Arith.PeanoNat Coq.funind.Recdef
-        CoqRecon.Maybe CoqRecon.Typ
+Require Export CoqRecon.Maybe
+        CoqRecon.Typ CoqRecon.EqDecInst
         Coq.micromega.Lia.
-
-Instance StringEqDec : EqDec string eq := {equiv_dec := string_dec}.
-Instance NatEqDec
-  : @EqDec nat (@eq nat) (@eq_equivalence nat) :=
-  {equiv_dec := Nat.eq_dec}.
 
 Inductive op : Set :=
 | And | Or | Add | Sub | Eq | Lt.
@@ -179,23 +173,3 @@ Section Sound.
       rewrite <- H5 in HC1; rewrite <- H7 in HC2. eauto.
   Qed.
 End Sound.
-
-Inductive Unify : list (typ * typ) -> tenv -> Prop :=
-| Unify_nil :
-    Unify [] ∅%env
-| Unify_cons_skip τ C σ :
-    Unify C σ ->
-    Unify ((τ,τ) :: C) σ
-| Unify_cons_var_l T τ C σ :
-    ~ In T (tvars τ) ->
-    let s := (T ↦ τ;; ∅)%env in
-    Unify (Ctsub s C) σ ->
-    Unify ((TVar T, τ) :: C) (σ ‡ s)%env
-| Unify_cons_var_r τ T C σ :
-    ~ In T (tvars τ) ->
-    let s := (T ↦ τ;; ∅)%env in
-    Unify (Ctsub s C) σ ->
-    Unify ((τ , TVar T) :: C) (σ ‡ s)%env
-| Unify_cons_arrow t t' τ τ' C σ :
-    Unify ((t,τ) :: (t',τ') :: C) σ ->
-    Unify ((t → τ, t' → τ')%typ :: C) σ.

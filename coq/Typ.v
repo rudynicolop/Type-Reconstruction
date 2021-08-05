@@ -55,7 +55,9 @@ Fixpoint typ_size (t : typ) : nat :=
     *)
 
 Definition typ_size_vars (t : typ) : nat :=
-  typ_size t + length (tvars t).
+  let i := length (remove_dups (tvars t)) in
+  let j := typ_size t in
+  i * (1 + i) + j.
 
 Definition Ctvars : list (typ * typ) -> list nat :=
   fold_right (fun '(l,r) acc => tvars l ++ tvars r ++ acc) [].
@@ -63,11 +65,11 @@ Definition Ctvars : list (typ * typ) -> list nat :=
 Definition C_size : list (typ * typ) -> nat :=
   fold_right (fun '(l,r) acc => typ_size l + typ_size r + acc) 0.
 
-Definition C_size_vars : list (typ * typ) -> nat :=
-  fold_right
-    (fun '(l,r) acc =>
-       typ_size_vars l + typ_size_vars r + acc) 0.
-
+Definition C_size_vars (C : list (typ * typ)) : nat :=
+  let i := length (remove_dups (Ctvars C)) in
+  let j := C_size C in
+  i * (1 + i) + j.
+    
 Section TypEq.
   Lemma typ_eq_reflexive : forall t, typ_eq t t = true.
   Proof.
@@ -176,6 +178,26 @@ Section TSub.
       rewrite IHt1,IHt2 by eauto. reflexivity.
     - apply Decidable.not_or in HIn as [Ht _].
       rewrite bind_complete by intuition. reflexivity.
+  Qed.
+
+  Lemma Ctsub_empty : forall C,
+      Ctsub ∅%env C = C.
+  Proof.
+    intro C; induction C as [| [l r] C IHC]; simpl; auto.
+    repeat rewrite tsub_empty. rewrite IHC. reflexivity.
+  Qed.
+
+  Lemma Ctsub_not_in_tvars : forall C T t s,
+      ~ In T (Ctvars C) ->
+      Ctsub (T ↦ t;; s)%env C = Ctsub s C.
+  Proof.
+    intro C; induction C as [| [l r] C IHC];
+      intros T t s HT; simpl in *; auto.
+    repeat rewrite in_app_iff in HT.
+    apply Decidable.not_or in HT as [HT1 HT2].
+    apply Decidable.not_or in HT2 as [HT2 HT3].
+    repeat rewrite tsub_not_in_tvars by auto.
+    rewrite IHC by auto. reflexivity.
   Qed.
   
   Lemma tsub_gamma_empty : forall g : gamma, (∅ × g = g)%env.
