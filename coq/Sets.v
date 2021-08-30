@@ -245,11 +245,7 @@ Section Sets.
     intros a l; induction l as [| h t IHt];
       intro H; simpl in *;
         [ contradiction | destruct H as [H | H]]; subst;
-          match goal with
-          | |- context [if equiv_dec ?a ?b then _ else _]
-            => destruct (equiv_dec a b);
-                unfold equiv in *; subst; auto
-          end.
+          dispatch_eqdec; auto.
   Qed.
 
   Local Hint Resolve In_member : core.
@@ -257,9 +253,8 @@ Section Sets.
   Lemma member_In : forall a l, member a l = true -> a ∈ l.
   Proof.
     intros a l; induction l as [| h t IHt];
-      intro H; simpl in *; try discriminate.
-    destruct (equiv_dec a h) as [Hah | Hah];
-      unfold equiv in *; subst; auto.
+      intro H; simpl in *; try discriminate;
+        dispatch_eqdec; auto.
   Qed.
 
   Local Hint Resolve member_In : core.
@@ -304,9 +299,7 @@ Section Sets.
       | S _ => true
       end.
   Proof.
-    intros [| n] a; simpl; auto.
-    destruct (equiv_dec a a);
-      unfold equiv, complement in *; try contradiction; auto.
+    intros [| n] a; simpl; auto. dispatch_eqdec; auto.
   Qed.
 
   Lemma intersect_Intersection : forall l r,
@@ -358,15 +351,8 @@ Section Sets.
   Proof.
     intro l; induction l as [| h l IHl];
       intros r a; simpl; auto.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *;
-      destruct (member h r) eqn:Hmemhr; subst; simpl; auto.
-    - destruct (equiv_dec a a);
-        unfold equiv, complement in *;
-        try contradiction; simpl; auto.
-    - destruct (equiv_dec h a);
-        unfold equiv, complement in *;
-        try contradiction; simpl; f_equal; auto.
+    destruct (member h r) eqn:Hmemhr;
+      repeat dispatch_eqdec; try rewrite IHl; reflexivity.
   Qed.
   
   Lemma remove_diff : forall l r : list A,
@@ -376,20 +362,16 @@ Section Sets.
       intro r; induction r as [| x r IHr]; simpl in *; auto.
     - rewrite IHr. reflexivity.
     - f_equal. rewrite diff_empty_r. reflexivity.
-    - destruct (equiv_dec a x) as [Hax | Hax];
-        unfold equiv, complement in *; subst; simpl.
+    - dispatch_eqdec.
       + rewrite IHr. rewrite remove_app.
         destruct (member x r); simpl.
         * rewrite remove_diff_cons. reflexivity.
-        * destruct (equiv_dec x x);
-            unfold equiv, complement in *; try contradiction; simpl.
+        * dispatch_eqdec.
           rewrite remove_diff_cons. reflexivity.
       + destruct (member a r) eqn:Hmemar; simpl in *.
         * rewrite IHr. rewrite remove_diff_cons. reflexivity.
         * rewrite IHr; simpl.
-          destruct (equiv_dec a x);
-            unfold equiv, complement in *;
-            try contradiction; simpl; f_equal.
+          dispatch_eqdec; f_equal.
           rewrite remove_diff_cons. reflexivity.
   Qed.
 

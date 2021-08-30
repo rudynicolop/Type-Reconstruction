@@ -106,15 +106,12 @@ Section Complete.
       repeat split.
       + constructor; simpl.
         * unfold satisfy; simpl.
-          destruct (equiv_dec T T) as [HTT | HTT];
-            unfold equiv, complement in *; try contradiction; simpl.
+          dispatch_eqdec.
           (* Need induction...probably...*) admit.
         * rewrite Forall_app; split.
           -- (* Need induction. *) admit.
           -- (* Need induction. *) admit.
-      + simpl; destruct (equiv_dec T T) as [HTT | HTT];
-          unfold equiv, complement in *;
-          try contradiction; simpl; reflexivity.
+      + simpl; dispatch_eqdec; reflexivity.
       + extensionality Y; unfold "∉"; simpl.
         destruct (equiv_dec Y T) as [HYT | HYT];
           unfold equiv, complement in *; subst. admit. admit.

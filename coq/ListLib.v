@@ -1,5 +1,5 @@
-Require Export Coq.Classes.EquivDec
-        Coq.Lists.List Coq.Sorting.Permutation
+Require Export Coq.Lists.List
+        Coq.Sorting.Permutation
         CoqRecon.Base Coq.micromega.Lia
         Coq.Arith.Compare_dec.
 Export ListNotations.
@@ -18,8 +18,7 @@ Section Uniques.
   Proof.
     intro l; induction l as [| h l IHl];
       intros a H; simpl in *; auto.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl in *; firstorder.
+    dispatch_eqdec; firstorder.
   Qed.
 
   Lemma remove_not_in : forall l a,
@@ -28,8 +27,7 @@ Section Uniques.
     intro l; induction l as [| h l IHl];
       intros a H; simpl in *; auto.
     apply Decidable.not_or in H as (Hha & Hal).
-    destruct (equiv_dec h a) as [? | _];
-      unfold equiv, complement in *; subst; simpl in *; try contradiction.
+    dispatch_eqdec.
     apply IHl in Hal. rewrite Hal. reflexivity.
   Qed.
 
@@ -38,8 +36,7 @@ Section Uniques.
   Proof.
     intro l; induction l as [| h l IHl];
       intros a x Hal; simpl in *; auto.
-    destruct (equiv_dec h x) as [Hhx | Hhx];
-      unfold equiv, complement in *; subst; simpl in *; firstorder.
+    dispatch_eqdec; firstorder.
   Qed.
 
   Lemma remove_complete : forall l a x,
@@ -47,9 +44,7 @@ Section Uniques.
   Proof.
     intro l; induction l as [| h l IHl];
       intros a x Hax Hal; simpl in *; auto.
-    destruct (equiv_dec h x) as [Hhx | Hhx];
-      unfold equiv, complement in *; subst; simpl in *;
-        destruct Hal; intuition.
+    dispatch_eqdec; destruct Hal; intuition.
   Qed.
 
   Fixpoint uniques (l : list A) : list A :=
@@ -71,8 +66,7 @@ Section Uniques.
   Proof.
     intro l; induction l as [| h l IHl];
       intros a Hal; simpl in *; auto.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; auto.
+    eqdec h a; auto.
     destruct Hal; try contradiction.
     eauto using remove_complete.
   Qed.
@@ -84,8 +78,7 @@ Section Uniques.
       NoDup l -> forall a, NoDup (remove a l).
   Proof.
     intros l H; induction H; intros a; simpl; auto.
-    destruct (equiv_dec x a) as [Hxa | Hxa];
-      unfold equiv, complement in *; subst; simpl in *; eauto.
+    dispatch_eqdec; eauto.
   Qed.
 
   Local Hint Resolve remove_correct : core.
@@ -112,8 +105,7 @@ Section Uniques.
     intro l; induction l as [| h l IHl];
       intro a; simpl; auto.
     rewrite app_length.
-    specialize IHl with a.
-    destruct (equiv_dec h a); simpl; lia.
+    specialize IHl with a. dispatch_eqdec; lia.
   Qed.
 
   Lemma uniques_length : forall l,
@@ -135,27 +127,15 @@ Section Uniques.
       remove a (remove x l) = remove x (remove a l).
   Proof.
     intro l; induction l as [| h l IHl];
-      intros a x; simpl; auto.
-    destruct (equiv_dec h x) as [Hhx | Hhx];
-      destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl; auto.
-    - destruct (equiv_dec x x);
-        unfold equiv, complement in *; simpl; intuition.
-    - destruct (equiv_dec a a);
-        unfold equiv, complement in *; simpl; intuition.
-    - destruct (equiv_dec h x); destruct (equiv_dec h a);
-        unfold equiv, complement in *;
-        subst; simpl; try contradiction; auto.
-      rewrite IHl. reflexivity.
+      intros a x; simpl; auto; repeat dispatch_eqdec;
+        auto; rewrite IHl; reflexivity.
   Qed.
   
   Lemma remove_uniques_comm : forall l a,
       remove a (uniques l) = uniques (remove a l).
   Proof.
     intro l; induction l as [| h l IHl];
-      intro a; simpl; auto.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl.
+      intro a; simpl; try dispatch_eqdec; auto.
     - rewrite remove_idempotent; auto.
     - rewrite remove_comm. rewrite IHl.
       reflexivity.
@@ -174,10 +154,8 @@ Section Uniques.
       remove a (l ++ r) = remove a l ++ remove a r.
   Proof.
     intro l; induction l as [| h l IHl];
-      intros r a; simpl; auto.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl;
-        rewrite IHl; reflexivity.
+      intros r a; simpl; try dispatch_eqdec;
+        try rewrite IHl; auto.
   Qed.
   
   Lemma uniques_app : forall l r,
@@ -201,7 +179,7 @@ Section Uniques.
     repeat rewrite remove_app; simpl.
     rewrite rev_app_distr.
     rewrite IHl. f_equal.
-    destruct (equiv_dec h a); reflexivity.
+    dispatch_eqdec; reflexivity.
   Qed.
   
   Lemma uniques_app2 : forall l r,
@@ -222,9 +200,8 @@ Section Uniques.
   Proof.
     intro n; induction n as [| n IHn];
       intro a; simpl; auto.
-    rewrite IHn. destruct n; simpl; auto.
-    destruct (equiv_dec a a);
-      unfold equiv, complement in *; try contradiction; auto.
+    rewrite IHn.
+    destruct n; simpl; try dispatch_eqdec; auto.
   Qed.
 
   Fixpoint count (a : A) (l : list A) : nat :=
@@ -242,12 +219,8 @@ Section Uniques.
   
   Lemma count_remove : forall l a, count a (remove a l) = 0.
   Proof.
-    intro l; induction l as [| h l IHl]; intro a; simpl; auto.
-    rewrite count_app. rewrite IHl.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl; auto.
-    destruct (equiv_dec h a);
-      unfold equiv, complement in *; subst; simpl; try contradiction; auto.
+    intro l; induction l as [| h l IHl]; intro a; simpl;
+      repeat dispatch_eqdec; try rewrite IHl; auto.
   Qed.
 
   Lemma count_remove_le : forall l a x,
@@ -255,20 +228,14 @@ Section Uniques.
   Proof.
     intro l; induction l as [| h l IHl]; intros a x; simpl; try lia.
     specialize IHl with (a := a) (x := x).
-    destruct (equiv_dec h x); destruct (equiv_dec h a);
-      unfold equiv, complement in *; subst; simpl; try lia.
-    - destruct (equiv_dec a a); try lia.
-    - destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; try contradiction; lia.
+    repeat dispatch_eqdec; try lia.
   Qed.
 
   Lemma count_uniques : forall l a,
       count a (uniques l) <= 1.
   Proof.
     intro l; induction l as [| h l IHl]; intro a; simpl; auto.
-    specialize IHl with a.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl.
+    specialize IHl with a. dispatch_eqdec.
     - rewrite count_remove. lia.
     - pose proof count_remove_le (uniques l) a h as Hle. lia.
   Qed.
@@ -277,28 +244,16 @@ Section Uniques.
       In a l <-> count a l > 0.
   Proof.
     intro l; induction l as [| h l IHl];
-      intro a; simpl; split; intros H; try lia.
-    - destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; simpl; try lia.
-      firstorder.
-    - destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; simpl; firstorder.
+      intro a; simpl; split; intros H;
+        try dispatch_eqdec; try firstorder lia.
   Qed.
 
   Lemma count_not_in : forall l a,
       ~ In a l <-> count a l = 0.
   Proof.
     intro l; induction l as [| h l IHl];
-      intro a; simpl; split; intros H; try lia.
-    - apply Decidable.not_or in H as [Hha Hal].
-      destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; simpl;
-          try contradiction; firstorder.
-    - destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; simpl;
-          intros [? | ?]; subst;
-            try contradiction; try discriminate.
-      firstorder.
+      intro a; simpl; split; intros H;
+        try dispatch_eqdec; try firstorder lia.
   Qed.
 
   Lemma count_length_le : forall l a,
@@ -307,57 +262,26 @@ Section Uniques.
     intro l; induction l as [| h l IHl];
       intro a; simpl; try lia.
     specialize IHl with a.
-    destruct (equiv_dec h a); simpl; try lia.
+    dispatch_eqdec; lia.
   Qed.
   
   Lemma count_remove_length : forall l a,
       length (remove a l) = length l - count a l.
   Proof.
-    intro l; induction l as [| h l IHl]; intro a; simpl; auto.
-    destruct (equiv_dec h a);
-      unfold equiv, complement in *; subst; simpl; auto.
+    intro l; induction l as [| h l IHl]; intro a; simpl;
+      repeat dispatch_eqdec; auto.
     destruct (count a l) as [| n] eqn:Hcnt.
     - rewrite <- count_not_in in Hcnt.
       rewrite remove_not_in by assumption. reflexivity.
     - rewrite IHl. rewrite Hcnt.
       pose proof count_length_le l a as HCL. lia.
   Qed.
-
-  Lemma count_fold_remove_length : forall r l,
-      length (fold_right remove l r) =
-      length l - fold_right Nat.add 0 (map (fun a => count a r) l).
-  Proof.
-    intro r; induction r as [| x r IHr];
-      intro l; induction l as [| h l IHl];
-        simpl in *; auto.
-    - destruct (fold_right Nat.add 0 (map (fun _ : A => 0) l))
-        as [| n] eqn:Heqfr; simpl; auto.
-      rewrite IHl at 1.
-      destruct l; simpl in *; try lia.
-    - rewrite count_remove_length.
-      rewrite IHr; simpl; reflexivity.
-    - rewrite count_remove_length.
-      destruct (equiv_dec x h) as [Hxh | Hxh];
-        unfold equiv, complement in *; subst; simpl in *.
-      + rewrite IHr; simpl.
-        destruct
-          (count h r + fold_right Nat.add 0 (map (fun a : A => count a r) l))
-          as [| n] eqn:Heqcntfr; simpl.
-        * destruct (count h (fold_right remove (h :: l) r))
-            as [| m] eqn:Hcntfr; simpl.
-          -- admit.
-          -- admit.
-        * admit.
-      + admit.
-  Abort.
     
   Lemma count_repeat : forall n a,
       count a (repeat a n) = n.
   Proof.
-    intro n; induction n as [| n IHn]; intro a; simpl; auto.
-    rewrite IHn.
-    destruct (equiv_dec a a);
-      unfold equiv, complement in *; try contradiction; auto.
+    intro n; induction n as [| n IHn]; intro a; simpl;
+      try dispatch_eqdec; try rewrite IHn; auto.
   Qed.
 
   Local Hint Constructors Permutation : core.
@@ -365,11 +289,8 @@ Section Uniques.
   Lemma remove_perm : forall l l',
       Permutation l l' -> forall a, Permutation (remove a l) (remove a l').
   Proof.
-    intros l l' H; induction H; intro a; simpl; eauto.
-    - destruct (equiv_dec x a) as [Hxa | Hxa];
-        unfold equiv, complement in *; subst; simpl; auto.
-    - destruct (equiv_dec y a); destruct (equiv_dec x a);
-        unfold equiv, complement in *; subst; simpl; auto.
+    intros l l' H; induction H; intro a; simpl;
+      repeat dispatch_eqdec; eauto.
   Qed.
 
   Local Hint Resolve remove_perm : core.
@@ -378,10 +299,7 @@ Section Uniques.
       Permutation l l' -> Permutation (uniques l) (uniques l').
   Proof.
     intros l l' H; induction H; simpl; eauto 3.
-    rewrite remove_comm.
-    destruct (equiv_dec x y); destruct (equiv_dec y x);
-      unfold equiv, complement in *; subst;
-        try contradiction; simpl; auto.
+    rewrite remove_comm. repeat dispatch_eqdec; auto.
   Qed.
 
   Lemma In_split_repeat_perm : forall l (a : A),
@@ -390,11 +308,9 @@ Section Uniques.
   Proof.
     intro l; induction l as [| h t IHt];
       intros a Hal; simpl in *; try contradiction.
-    destruct (In_dec HEA a t) as [Hat | Hat];
-      destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst;
-        destruct Hal as [Hha' | Hat']; subst; simpl;
-          try contradiction.
+    destruct (In_dec HEA a t) as [Hat | Hat]; eqdec h a;
+      destruct Hal as [Hha' | Hat']; subst; simpl;
+        try contradiction.
     - apply IHt in Hat as (n & l' & Hl' & HP).
       exists (S n). exists l'. simpl; intuition.
     - apply IHt in Hat as (n & l' & Hl' & HP).

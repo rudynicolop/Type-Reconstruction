@@ -1,6 +1,19 @@
-Require Export Coq.Bool.Bool.
+Require Export Coq.Bool.Bool Coq.Classes.EquivDec.
 
 Ltac inv H := inversion H; subst; clear H.
+
+Ltac eqdec a b :=
+  destruct (equiv_dec a b) as [? | ?];
+  unfold equiv, complement in *; subst;
+  try contradiction; simpl.
+
+Ltac dispatch_eqdec :=
+  match goal with
+  | |- context [equiv_dec ?a ?b]
+    => eqdec a b
+  | H: context [equiv_dec ?a ?b] |- _
+    => eqdec a b; simpl in *
+  end.
 
 Lemma contrapositive : forall P Q : Prop,
     (P -> Q) -> ~ Q -> ~ P.
