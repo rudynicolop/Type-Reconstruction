@@ -129,9 +129,9 @@ Notation "'∅'" := empty (at level 0, no associativity) : env_scope.
 Notation "k ↦ v ';;' e"
   := (bind k v e)
        (at level 11, right associativity) : env_scope.
-Notation "e ∉ ks"
+(*Notation "e ∉ ks"
   := (mask e ks)
-       (at level 15, left associativity) : env_scope.
+  (at level 15, left associativity) : env_scope. *)
 Notation "eb ≺ ea"
   := (env_compose eb ea)
        (at level 14, left associativity) : env_scope.

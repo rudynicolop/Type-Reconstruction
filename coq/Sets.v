@@ -1,10 +1,4 @@
-Require Export Coq.Classes.EquivDec
-        Coq.Lists.List Coq.Bool.Bool
-        Coq.Sorting.Permutation
-        CoqRecon.Base Coq.micromega.Lia
-        Coq.Arith.Compare_dec.
-Export ListNotations.
-Require Import Coq.funind.Recdef.
+Require Export Coq.Bool.Bool CoqRecon.ListLib.
 
 Declare Scope set_scope.
 Delimit Scope set_scope with set.
@@ -13,420 +7,92 @@ Reserved Notation "l ∪ r" (at level 45, left associativity).
 Reserved Notation "l ∩ r" (at level 44, left associativity).
 Reserved Notation "l ∖ r" (at level 43, left associativity).
 
-Section Uniques.
+Notation "e ∈ s"
+  := (In e s)
+       (at level 80, no associativity) : set_scope.
+
+Notation "e ∉ s"
+  := (~ In e s)
+       (at level 80, no associativity) : set_scope.
+
+(** [l ⊆ r] *)
+Definition Subset {A : Set} (l r : list A) : Prop :=
+  forall a, (a ∈ l -> a ∈ r)%set.
+
+Notation "l ⊆ r"
+  := (Subset l r)
+       (at level 80, no associativity) : set_scope.
+
+Definition set_equiv {A : Set} (l r : list A) : Prop :=
+  (l ⊆ r /\ r ⊆ l)%set.
+
+Notation "l ≡ r"
+  := (set_equiv l r)
+       (at level 80, no associativity) : set_scope.
+
+Section SetEquiv.
+  Open Scope set_scope.
+
   Context {A : Set}.
-  Context {HEA: EqDec A eq}.
 
-  Fixpoint remove (a : A) (l : list A) : list A :=
-    match l with
-    | []    => []
-    | h :: l => (if h == a then [] else [h]) ++ remove a l
-    end.
-
-  Lemma remove_correct : forall l a, ~ In a (remove a l).
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intros a H; simpl in *; auto.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl in *; firstorder.
-  Qed.
-
-  Lemma remove_not_in : forall l a,
-      ~ In a l -> remove a l = l.
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intros a H; simpl in *; auto.
-    apply Decidable.not_or in H as (Hha & Hal).
-    destruct (equiv_dec h a) as [? | _];
-      unfold equiv, complement in *; subst; simpl in *; try contradiction.
-    apply IHl in Hal. rewrite Hal. reflexivity.
-  Qed.
-
-  Lemma remove_sound : forall l a x,
-      In a (remove x l) -> In a l.
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intros a x Hal; simpl in *; auto.
-    destruct (equiv_dec h x) as [Hhx | Hhx];
-      unfold equiv, complement in *; subst; simpl in *; firstorder.
-  Qed.
-
-  Lemma remove_complete : forall l a x,
-      x <> a -> In a l -> In a (remove x l).
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intros a x Hax Hal; simpl in *; auto.
-    destruct (equiv_dec h x) as [Hhx | Hhx];
-      unfold equiv, complement in *; subst; simpl in *;
-        destruct Hal; intuition.
-  Qed.
-
-  Fixpoint uniques (l : list A) : list A :=
-    match l with
-    | []    => []
-    | a :: l => a :: remove a (uniques l)
-    end.
+  Local Hint Unfold set_equiv : core.
+  Local Hint Unfold Subset : core.
+  Local Hint Unfold Reflexive : core.
   
-  Lemma uniques_sound : forall l a,
-      In a (uniques l) -> In a l.
+  Lemma set_equiv_Reflexive :
+    Reflexive (@set_equiv A).
   Proof.
-    intro l; induction l as [| h l IHl];
-      intros a Hal; simpl in *; auto.
-    destruct Hal as [Hha | Hal]; eauto using remove_sound.
+    autounfold with core; auto.
   Qed.
 
-  Lemma uniques_complete : forall l a,
-      In a l -> In a (uniques l).
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intros a Hal; simpl in *; auto.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; auto.
-    destruct Hal; try contradiction.
-    eauto using remove_complete.
-  Qed.
-
-  Local Hint Constructors NoDup : core.
-  Local Hint Resolve remove_sound : core.
-
-  Lemma remove_nodup : forall l,
-      NoDup l -> forall a, NoDup (remove a l).
-  Proof.
-    intros l H; induction H; intros a; simpl; auto.
-    destruct (equiv_dec x a) as [Hxa | Hxa];
-      unfold equiv, complement in *; subst; simpl in *; eauto.
-  Qed.
-
-  Local Hint Resolve remove_correct : core.
-  Local Hint Resolve remove_nodup : core.
+  Local Hint Unfold Symmetric : core.
   
-  Lemma uniques_nodup : forall l,
-      NoDup (uniques l).
+  Lemma set_equiv_Symmetric :
+    Symmetric (@set_equiv A).
   Proof.
-    intro l; induction l as [| a l IHl]; simpl; auto.
+    autounfold with core; intuition.
   Qed.
 
-  Local Hint Resolve uniques_sound : core.
-  Local Hint Resolve uniques_complete : core.
+  Local Hint Unfold Transitive : core.
 
-  Lemma uniques_iff : forall a l,
-      In a (uniques l) <-> In a l.
+  Lemma set_equiv_Transitive :
+    Transitive (@set_equiv A).
   Proof.
-    intuition.
+    autounfold with core; intuition.
   Qed.
-
-  Lemma remove_length : forall l a,
-      length (remove a l) <= length l.
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intro a; simpl; auto.
-    rewrite app_length.
-    specialize IHl with a.
-    destruct (equiv_dec h a); simpl; lia.
-  Qed.
-
-  Lemma uniques_length : forall l,
-      length (uniques l) <= length l.
-  Proof.
-    intro l; induction l as [| a l IHl]; simpl in *; auto.
-    pose proof remove_length (uniques l) a. lia.
-  Qed.
-
-  Lemma remove_idempotent : forall l a,
-      remove a (remove a l) = remove a l.
-  Proof.
-    intros l a.
-    rewrite remove_not_in with (l := remove a l) by auto.
-    reflexivity.
-  Qed.
-
-  Lemma remove_comm : forall l a x,
-      remove a (remove x l) = remove x (remove a l).
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intros a x; simpl; auto.
-    destruct (equiv_dec h x) as [Hhx | Hhx];
-      destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl; auto.
-    - destruct (equiv_dec x x);
-        unfold equiv, complement in *; simpl; intuition.
-    - destruct (equiv_dec a a);
-        unfold equiv, complement in *; simpl; intuition.
-    - destruct (equiv_dec h x); destruct (equiv_dec h a);
-        unfold equiv, complement in *;
-        subst; simpl; try contradiction; auto.
-      rewrite IHl. reflexivity.
-  Qed.
+End SetEquiv.
   
-  Lemma remove_uniques_comm : forall l a,
-      remove a (uniques l) = uniques (remove a l).
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intro a; simpl; auto.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl.
-    - rewrite remove_idempotent; auto.
-    - rewrite remove_comm. rewrite IHl.
-      reflexivity.
-  Qed.
-
-  Lemma uniques_idempotent : forall l,
-      uniques (uniques l) = uniques l.
-  Proof.
-    intro l; induction l as [| a l IHl]; simpl; auto.
-    repeat rewrite <- remove_uniques_comm.
-    rewrite remove_idempotent. rewrite IHl.
-    reflexivity.
-  Qed.
-
-  Lemma remove_app : forall l r a,
-      remove a (l ++ r) = remove a l ++ remove a r.
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intros r a; simpl; auto.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl;
-        rewrite IHl; reflexivity.
-  Qed.
-  
-  Lemma uniques_app : forall l r,
-      uniques (l ++ r) = uniques (uniques l ++ uniques r).
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intro r; simpl.
-    - rewrite uniques_idempotent. reflexivity.
-    - f_equal. rewrite IHl.
-      repeat rewrite remove_uniques_comm.
-      repeat rewrite remove_app.
-      rewrite <- remove_uniques_comm.
-      rewrite remove_idempotent. reflexivity.
-  Qed.
-
-  Lemma remove_rev : forall l a,
-      rev (remove a l) = remove a (rev l).
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intro a; simpl; auto.
-    repeat rewrite remove_app; simpl.
-    rewrite rev_app_distr.
-    rewrite IHl. f_equal.
-    destruct (equiv_dec h a); reflexivity.
-  Qed.
-  
-  Lemma uniques_app2 : forall l r,
-      uniques (l ++ r) = uniques l ++ fold_right remove (uniques r) l.
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intro r; simpl; auto.
-    f_equal. rewrite IHl.
-    rewrite remove_app. reflexivity.
-  Qed.
-
-  Lemma uniques_repeat : forall n a,
-      uniques (repeat a n) =
-      match n with
-      | O   => []
-      | S _ => [a]
-      end.
-  Proof.
-    intro n; induction n as [| n IHn];
-      intro a; simpl; auto.
-    rewrite IHn. destruct n; simpl; auto.
-    destruct (equiv_dec a a);
-      unfold equiv, complement in *; try contradiction; auto.
-  Qed.
-
-  Fixpoint count (a : A) (l : list A) : nat :=
-    match l with
-    | []    => 0
-    | h :: l => (if h == a then 1 else 0) + count a l
-    end.
-
-  Lemma count_app : forall l r a,
-      count a (l ++ r) = count a l + count a r.
-  Proof.
-    intro l; induction l as [| h l IHl]; intros r a; simpl; auto.
-    rewrite IHl. rewrite PeanoNat.Nat.add_assoc. reflexivity.
-  Qed.
-  
-  Lemma count_remove : forall l a, count a (remove a l) = 0.
-  Proof.
-    intro l; induction l as [| h l IHl]; intro a; simpl; auto.
-    rewrite count_app. rewrite IHl.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl; auto.
-    destruct (equiv_dec h a);
-      unfold equiv, complement in *; subst; simpl; try contradiction; auto.
-  Qed.
-
-  Lemma count_remove_le : forall l a x,
-      count a (remove x l) <= count a l.
-  Proof.
-    intro l; induction l as [| h l IHl]; intros a x; simpl; try lia.
-    specialize IHl with (a := a) (x := x).
-    destruct (equiv_dec h x); destruct (equiv_dec h a);
-      unfold equiv, complement in *; subst; simpl; try lia.
-    - destruct (equiv_dec a a); try lia.
-    - destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; try contradiction; lia.
-  Qed.
-
-  Lemma count_uniques : forall l a,
-      count a (uniques l) <= 1.
-  Proof.
-    intro l; induction l as [| h l IHl]; intro a; simpl; auto.
-    specialize IHl with a.
-    destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst; simpl.
-    - rewrite count_remove. lia.
-    - pose proof count_remove_le (uniques l) a h as Hle. lia.
-  Qed.
-
-  Lemma count_in : forall l a,
-      In a l <-> count a l > 0.
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intro a; simpl; split; intros H; try lia.
-    - destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; simpl; try lia.
-      firstorder.
-    - destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; simpl; firstorder.
-  Qed.
-
-  Lemma count_not_in : forall l a,
-      ~ In a l <-> count a l = 0.
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intro a; simpl; split; intros H; try lia.
-    - apply Decidable.not_or in H as [Hha Hal].
-      destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; simpl;
-          try contradiction; firstorder.
-    - destruct (equiv_dec h a);
-        unfold equiv, complement in *; subst; simpl;
-          intros [? | ?]; subst;
-            try contradiction; try discriminate.
-      firstorder.
-  Qed.
-
-  Lemma count_length_le : forall l a,
-      count a l <= length l.
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intro a; simpl; try lia.
-    specialize IHl with a.
-    destruct (equiv_dec h a); simpl; try lia.
-  Qed.
-  
-  Lemma count_remove_length : forall l a,
-      length (remove a l) = length l - count a l.
-  Proof.
-    intro l; induction l as [| h l IHl]; intro a; simpl; auto.
-    destruct (equiv_dec h a);
-      unfold equiv, complement in *; subst; simpl; auto.
-    destruct (count a l) as [| n] eqn:Hcnt.
-    - rewrite <- count_not_in in Hcnt.
-      rewrite remove_not_in by assumption. reflexivity.
-    - rewrite IHl. rewrite Hcnt.
-      pose proof count_length_le l a as HCL. lia.
-  Qed.
-
-  Lemma count_fold_remove_length : forall r l,
-      length (fold_right remove l r) =
-      length l - fold_right Nat.add 0 (map (fun a => count a r) l).
-  Proof.
-    intro r; induction r as [| x r IHr];
-      intro l; induction l as [| h l IHl];
-        simpl in *; auto.
-    - destruct (fold_right Nat.add 0 (map (fun _ : A => 0) l))
-        as [| n] eqn:Heqfr; simpl; auto.
-      rewrite IHl at 1.
-      destruct l; simpl in *; try lia.
-    - rewrite count_remove_length.
-      rewrite IHr; simpl; reflexivity.
-    - rewrite count_remove_length.
-      destruct (equiv_dec x h) as [Hxh | Hxh];
-        unfold equiv, complement in *; subst; simpl in *.
-      + rewrite IHr; simpl.
-        destruct
-          (count h r + fold_right Nat.add 0 (map (fun a : A => count a r) l))
-          as [| n] eqn:Heqcntfr; simpl.
-        * destruct (count h (fold_right remove (h :: l) r))
-            as [| m] eqn:Hcntfr; simpl.
-          -- admit.
-          -- admit.
-        * admit.
-      + admit.
-  Abort.
-    
-  Lemma count_repeat : forall n a,
-      count a (repeat a n) = n.
-  Proof.
-    intro n; induction n as [| n IHn]; intro a; simpl; auto.
-    rewrite IHn.
-    destruct (equiv_dec a a);
-      unfold equiv, complement in *; try contradiction; auto.
-  Qed.
-
-  Local Hint Constructors Permutation : core.
-
-  Lemma remove_perm : forall l l',
-      Permutation l l' -> forall a, Permutation (remove a l) (remove a l').
-  Proof.
-    intros l l' H; induction H; intro a; simpl; eauto.
-    - destruct (equiv_dec x a) as [Hxa | Hxa];
-        unfold equiv, complement in *; subst; simpl; auto.
-    - destruct (equiv_dec y a); destruct (equiv_dec x a);
-        unfold equiv, complement in *; subst; simpl; auto.
-  Qed.
-
-  Local Hint Resolve remove_perm : core.
-  
-  Lemma uniques_perm : forall l l',
-      Permutation l l' -> Permutation (uniques l) (uniques l').
-  Proof.
-    intros l l' H; induction H; simpl; eauto 3.
-    rewrite remove_comm.
-    destruct (equiv_dec x y); destruct (equiv_dec y x);
-      unfold equiv, complement in *; subst;
-        try contradiction; simpl; auto.
-  Qed.
-End Uniques.
-
-Section Sets.
+Section SetDefs.
   Context {A : Set}.
-        
-  (** [l ⊆ r] *)
-  Definition Subset (l r : list A) : Prop :=
-    forall a, In a l -> In a r.
 
+  Open Scope set_scope.
+  
   Local Hint Unfold Subset : core.
   Local Hint Resolve Permutation_in : core.
   Local Hint Resolve Permutation_sym : core.
 
-  Lemma Subset_perm_l : forall l l',
+  Lemma Subset_perm_l : forall l l' : list A,
       Permutation l l' ->
-      forall r, Subset l r -> Subset l' r.
+      forall r, l ⊆ r -> l' ⊆ r.
   Proof. eauto. Qed.
 
-  Lemma Subset_perm_r : forall r r',
+  Lemma Subset_perm_r : forall r r' : list A,
       Permutation r r' ->
-      forall l, Subset l r -> Subset l r'.
+      forall l, l ⊆ r -> l ⊆ r'.
   Proof. eauto. Qed.
   
   (** [u] is the union of [l] & [r]. *)
   Definition Union (l r u : list A) : Prop :=
-    forall a, In a u <-> In a l \/ In a r.
+    forall a, a ∈ u <-> a ∈ l \/ a ∈ r.
 
   Local Hint Unfold Union : core.
 
   Lemma Union_Subset_l : forall l r u,
-      Union l r u -> Subset l u.
+      Union l r u -> l ⊆ u.
   Proof. firstorder. Qed.
 
   Lemma Union_Subset_r : forall l r u,
-      Union l r u -> Subset r u.
+      Union l r u -> r ⊆ u.
   Proof. firstorder. Qed.
 
   Lemma Union_perm_l : forall l l',
@@ -446,20 +112,20 @@ Section Sets.
       
   (** [i] is the intersection of [l] & [r]. *)
   Definition Intersection (l r i : list A) : Prop :=
-    forall a, In a i <-> In a l /\ In a r.
+    forall a, a ∈ i <-> a ∈ l /\ a ∈ r.
 
   Definition Disjoint (l r : list A) : Prop := Intersection l r [].
 
   Local Hint Unfold Intersection : core.
 
   Lemma Inter_Subset_l : forall l r i,
-      Intersection l r i -> Subset i l.
+      Intersection l r i -> i ⊆ l.
   Proof.
     firstorder.
   Qed.
 
   Lemma Inter_Subset_r : forall l r i,
-      Intersection l r i -> Subset i r.
+      Intersection l r i -> i ⊆ r.
   Proof.
     firstorder.
   Qed.
@@ -486,12 +152,12 @@ Section Sets.
   
   (** [d] is the diff of [l] & [r]. *)
   Definition Difference (l r d : list A) : Prop :=
-    forall a, In a d <-> In a l /\ ~ In a r.
+    forall a, a ∈ d <-> a ∈ l /\ a ∉ r.
 
   Local Hint Unfold Difference : core.
   
   Lemma Diff_Subset : forall l r d,
-      Difference l r d -> Subset d l.
+      Difference l r d -> d ⊆ l.
   Proof.
     firstorder.
   Qed.
@@ -516,49 +182,65 @@ Section Sets.
   Qed.
 
   Lemma Subset_Diff : forall l r,
-      Subset l r ->
+      l ⊆ r ->
       Difference l r [].
   Proof.
     unfold Subset, Difference.
     intros l r Hs a; simpl; intuition.
   Qed.
+
+  Lemma Subset_cons : forall l r : list A,
+      l ⊆ r -> forall a : A, a :: l ⊆ a :: r.
+  Proof.
+    unfold Subset; intros;
+      simpl in *; intuition.
+  Qed.
+End SetDefs.
+
+Section ComputeSets.
+  Context {A : Set} {HEA: EqDec A eq}.
   
-  Lemma append_Union : forall l r, Union l r (l ++ r).
+  Fixpoint member (a : A) (l : list A) : bool :=
+    match l with
+    | []    => false
+    | h :: t => if a == h then true else member a t
+    end.
+  
+  Fixpoint intersect (l r : list A) : list A :=
+    match l with
+    | []    => []
+    | h :: t =>
+      (if member h r then [h] else []) ++ intersect t r
+    end.
+
+  Fixpoint difference (l r : list A) : list A :=
+    match l with
+    | []    => []
+    | h :: t =>
+      (if member h r then [] else [h]) ++ difference t r
+    end.
+End ComputeSets.
+
+Notation "l ∪ r" := (l ++ r) : set_scope.
+Notation "l ∩ r" := (intersect l r) : set_scope.
+Notation "l ∖ r" := (difference l r) : set_scope.
+
+Section Sets.
+  Open Scope set_scope.
+  
+  Context {A : Set} {HEA: EqDec A eq}.
+
+  Local Hint Unfold Subset : core.
+  Local Hint Unfold Union : core.
+  Local Hint Unfold Intersection : core.
+  Local Hint Unfold Difference : core.
+  
+  Lemma append_Union : forall l r : list A, Union l r (l ∪ r).
   Proof.
     auto using in_app_iff.
   Qed.
 
-  Context {HEA: EqDec A eq}.
-
-  Lemma In_split_repeat_perm : forall l (a : A),
-      In a l -> exists n l',
-        ~ In a l' /\ Permutation l (repeat a (S n) ++ l').
-  Proof.
-    intro l; induction l as [| h t IHt];
-      intros a Hal; simpl in *; try contradiction.
-    destruct (In_dec HEA a t) as [Hat | Hat];
-      destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *; subst;
-        destruct Hal as [Hha' | Hat']; subst; simpl;
-          try contradiction.
-    - apply IHt in Hat as (n & l' & Hl' & HP).
-      exists (S n). exists l'. simpl; intuition.
-    - apply IHt in Hat as (n & l' & Hl' & HP).
-      exists (S n). exists l'. simpl; intuition.
-    - apply IHt in Hat as (n & l' & Hl' & HP).
-      exists n. exists (h :: l'). simpl; intuition.
-      rewrite app_comm_cons in *.
-      auto using Permutation_cons_app.
-    - exists 0. exists t. simpl; intuition.
-  Qed.
-  
-  Fixpoint member (a : A) (l : list A) : bool :=
-    match l with
-    | [] => false
-    | h::t => if a == h then true else member a t
-    end.
-
-  Lemma In_member : forall a l, In a l -> member a l = true.
+  Lemma In_member : forall a l, a ∈ l -> member a l = true.
   Proof.
     intros a l; induction l as [| h t IHt];
       intro H; simpl in *;
@@ -572,7 +254,7 @@ Section Sets.
 
   Local Hint Resolve In_member : core.
   
-  Lemma member_In : forall a l, member a l = true -> In a l.
+  Lemma member_In : forall a l, member a l = true -> a ∈ l.
   Proof.
     intros a l; induction l as [| h t IHt];
       intro H; simpl in *; try discriminate.
@@ -592,7 +274,7 @@ Section Sets.
   Qed.
 
   Lemma Not_In_member_iff : forall a l,
-      member a l = false <-> ~ In a l.
+      member a l = false <-> a ∉ l.
   Proof.
     intros a l.
     pose proof In_member_reflects a l as H.
@@ -600,7 +282,7 @@ Section Sets.
   Qed.
 
   Lemma member_app_or : forall a l r,
-      member a (l ++ r) = member a l || member a r.
+      member a (l ∪ r) = member a l || member a r.
   Proof.
     intros a l r.
     pose proof In_member_reflects a l as Hal; inv Hal; simpl.
@@ -626,16 +308,9 @@ Section Sets.
     destruct (equiv_dec a a);
       unfold equiv, complement in *; try contradiction; auto.
   Qed.
-  
-  Fixpoint intersect (l r : list A) : list A :=
-    match l with
-    | [] => []
-    | h::t =>
-      (if member h r then [h] else []) ++ intersect t r
-    end.
 
   Lemma intersect_Intersection : forall l r,
-      Intersection l r (intersect l r).
+      Intersection l r (l ∩ r).
   Proof.
     unfold Intersection; intro l;
       induction l as [| h t IHt];
@@ -650,15 +325,8 @@ Section Sets.
         * rewrite in_app_iff. firstorder.
   Qed.
 
-  Fixpoint difference (l r : list A) : list A :=
-    match l with
-    | [] => []
-    | h::t =>
-      (if member h r then [] else [h]) ++ difference t r
-    end.
-
   Lemma difference_Difference : forall l r,
-      Difference l r (difference l r).
+      Difference l r (l ∖ r).
   Proof.
     unfold Difference; intro l;
       induction l as [| h t IHt];
@@ -679,14 +347,14 @@ Section Sets.
   Qed.
 
   Lemma diff_empty_r : forall l : list A,
-      difference l [] = l.
+      l ∖ [] = l.
   Proof.
     intro l; induction l as [| h l]; simpl; auto.
     rewrite IHl. reflexivity.
   Qed.
 
   Lemma remove_diff_cons : forall l r a,
-      difference l (a :: r) = remove a (difference l r).
+      l ∖ (a :: r) = remove a (l ∖ r).
   Proof.
     intro l; induction l as [| h l IHl];
       intros r a; simpl; auto.
@@ -702,7 +370,7 @@ Section Sets.
   Qed.
   
   Lemma remove_diff : forall l r : list A,
-      fold_right remove l r = difference l r.
+      fold_right remove l r = l ∖ r.
   Proof.
     intro l; induction l as [| a l IHl];
       intro r; induction r as [| x r IHr]; simpl in *; auto.
@@ -726,7 +394,7 @@ Section Sets.
   Qed.
 
   Lemma Subset_difference : forall l r,
-      Subset l r -> difference l r = [].
+      l ⊆ r -> l ∖ r = [].
   Proof.
     intros l r Hlr. apply Subset_Diff in Hlr.
     unfold Difference in Hlr.
@@ -735,7 +403,7 @@ Section Sets.
   Qed.
 
   Corollary difference_same : forall l : list A,
-      difference l l = [].
+      l ∖ l = [].
   Proof.
     intros l. apply Subset_difference.
     intuition.
@@ -757,7 +425,7 @@ Section Sets.
   Qed.
 
   Lemma difference_app_l : forall l1 l2 r : list A,
-      difference (l1 ++ l2) r = difference l1 r ++ difference l2 r.
+      difference (l1 ∪ l2) r = difference l1 r ∪ difference l2 r.
   Proof.
     intro l1; induction l1 as [| h1 l1 IHl1];
       intros l2 r; simpl; auto.
@@ -765,7 +433,7 @@ Section Sets.
   Qed.
 
   Lemma difference_app_r_comm : forall l r1 r2 : list A,
-      difference l (r1 ++ r2) = difference l (r2 ++ r1).
+      difference l (r1 ∪ r2) = difference l (r2 ∪ r1).
   Proof.
     intro l; induction l as [| h l IHl]; intros r1 r2; simpl; auto.
     repeat rewrite member_app_or.
@@ -773,7 +441,7 @@ Section Sets.
   Qed.
 
   Lemma difference_app_r_assoc : forall l r1 r2 : list A,
-      difference (difference l r1) r2 = difference l (r1 ++ r2).
+      l ∖ r1 ∖ r2 = l ∖ (r1 ∪ r2).
   Proof.
     intro l; induction l as [| h l IHl];
       intros r1 r2; simpl; auto.
@@ -781,21 +449,6 @@ Section Sets.
     destruct (member h r1) eqn:Hmemhr1; simpl; auto.
     rewrite IHl. reflexivity.
   Qed.
-
-  Lemma length_diff : forall l r : list A,
-      length (difference l r) +
-      fold_right Nat.add 0 (map (fun a => count a l) r) = length l.
-  Proof.
-    intro l; induction l as [| h l IHl];
-      intro r; induction r as [| x r IHr];
-        simpl; auto.
-    - rewrite PeanoNat.Nat.add_0_r.
-      rewrite diff_empty_r. reflexivity.
-    - destruct (equiv_dec h x) as [Hhx | Hhx];
-        unfold equiv, complement in *; subst; simpl.
-      + rewrite remove_diff_cons.
-        rewrite count_remove_length.
-  Abort.
 
   Local Hint Resolve Permutation_app_comm : core.
   
@@ -817,53 +470,32 @@ Section Sets.
   Local Hint Resolve intersect_Intersection : core.
   Local Hint Resolve difference_Difference : core.
   
-  Lemma Subset_union_l : forall l r, Subset l (l ++ r).
+  Lemma Subset_union_l : forall l r : list A, l ⊆ l ∪ r.
   Proof.
     eauto.
   Qed.
 
-  Lemma Subset_union_r : forall l r, Subset r (l ++ r).
+  Lemma Subset_union_r : forall l r : list A, r ⊆ l ∪ r.
   Proof.
     eauto.
   Qed.
 
-  Lemma Subset_inter_l : forall l r, Subset (intersect l r) l.
+  Lemma Subset_inter_l : forall l r, l ∩ r ⊆ l.
   Proof.
     eauto.
   Qed.
 
-  Lemma Subset_inter_r : forall l r, Subset (intersect l r) r.
+  Lemma Subset_inter_r : forall l r, l ∩ r ⊆ r.
   Proof.
     eauto.
   Qed.
 
-  Lemma Subset_diff : forall l r, Subset (difference l r) l.
+  Lemma Subset_diff : forall l r, l ∖ r ⊆ l.
   Proof.
     eauto.
   Qed.
-End Sets.
-
-Notation "l ⊆ r"
-  := (Subset l r)
-       (at level 80, no associativity) : set_scope.
-Notation "l ∪ r" := (l ++ r) : set_scope.
-Notation "l ∩ r" := (intersect l r) : set_scope.
-Notation "l ∖ r" := (difference l r) : set_scope.
-
-Section SubsetUnion.
-  Open Scope set_scope.
-
-  Context {A : Set}.
 
   Hint Rewrite in_app_iff : core.
-  Local Hint Unfold Subset : core.
-
-  Lemma Subset_cons : forall l r : list A,
-      l ⊆ r -> forall a : A, a :: l ⊆ a :: r.
-  Proof.
-    unfold Subset; intros;
-      simpl in *; intuition.
-  Qed.
 
   Lemma Subset_l_union : forall l r : list A,
       l ⊆ r -> forall s, l ⊆ r ∪ s.
@@ -898,13 +530,6 @@ Section SubsetUnion.
   Proof.
     auto using Permutation_app_comm.
   Qed.
-End SubsetUnion.
-
-Section InterNil.
-  Open Scope set_scope.
-
-  Context {A : Set}.
-  Context {HEA: EqDec A eq}.
   
   Lemma Inter_nil : forall l r : list A,
       Intersection l r [] -> l ∩ r = [].
@@ -915,9 +540,22 @@ Section InterNil.
     pose proof (In_member_reflects a r) as Har;
       inv Har; simpl in *; firstorder.
   Qed.
-End InterNil.
+
+  Lemma inter_union_distr : forall l r s,
+      l ∩ (r ∪ s) = l ∩ r ∪ l ∩ s.
+  Proof.
+    intros l;
+      induction l as [| h l IHl];
+      intros r s; simpl; auto.
+    rewrite member_app_or.
+    pose proof In_member_reflects h r as Hhr;
+      pose proof In_member_reflects h s as Hhs;
+      inv Hhr; inv Hhs; simpl; f_equal; auto.
+  Abort.
+End Sets.
 
 Section NatSet.
+  Open Scope set_scope.
   Local Hint Constructors Forall : core.
 
   Lemma list_max_ge : forall l : list nat,
@@ -932,7 +570,7 @@ Section NatSet.
   Qed.
 
   Lemma list_max_ge_in : forall l n,
-      In n l -> n <= list_max l.
+      n ∈ l -> n <= list_max l.
   Proof.
     intro l. rewrite <- Forall_forall.
     exact (list_max_ge l).
@@ -949,7 +587,7 @@ Section NatSet.
   Qed.
 
   Lemma list_max_succ_not_in : forall l : list nat,
-      ~ In (1 + list_max l) l.
+      1 + list_max l ∉ l.
   Proof.
     intros l HIn.
     pose proof list_max_succ l as H.
@@ -958,8 +596,6 @@ Section NatSet.
     pose proof HFF H as H'.
     apply H' in HIn. lia.
   Qed.
-
-  Open Scope set_scope.
 
   Lemma Subset_list_max : forall l r,
       l ⊆ r -> list_max l <= list_max r.

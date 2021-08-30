@@ -349,7 +349,7 @@ Section CGEN.
       cgen u used g e = Some (t,X,C) ->
       (u ⊆ used)%set ->
       (forall x t, g x = Some t -> (tvars t ⊆ u)%set) ->
-      g ⊢ e ∈ t ⊣ X @ C.
+      g ⊢ e ∴ t ⊣ X ≀ C.
   Proof.
     cgen_ind; intros Hu Hg; eauto.
     - constructor; eauto.
@@ -416,62 +416,33 @@ Section CGEN.
                 eapply cgen_used_X in Heqo; eauto.
                 eapply list_max_ge_in in H0; eauto. lia.
         * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
-          -- rewrite max_r with (n:=list_max l1) in H by lia.
-             destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
-             ++ rewrite max_r in H by lia.
-                eapply cgen_used_X in Heqo0; eauto.
-                eapply list_max_ge_in in H; eauto. lia.
-             ++ rewrite max_l in H by lia.
-                eapply cgen_used_X in Heqo0; eauto.
-                eapply list_max_ge_in in H; eauto. lia.
-          -- rewrite max_l with (n:=list_max l1) in H by lia.
-             destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
-             ++ rewrite max_r in H by lia.
-                eapply cgen_used_X in Heqo0; eauto.
-                eapply list_max_ge_in in H; eauto. lia.
-             ++ rewrite max_l in H by lia.
-                eapply cgen_used_X in Heqo0; eauto.
-                eapply list_max_ge_in in H; eauto. lia.
-        * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
           -- rewrite max_r with (n:=list_max l1) in H0 by lia.
              destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
              ++ rewrite max_r in H0 by lia.
-                apply H1 in H0 as H'.
-                rewrite in_app_iff in H'.
-                eapply list_max_ge_in in H0; eauto.
-                destruct H' as [H' | H'];
-                  eapply list_max_ge_in in H'; eauto; lia.
+                eapply cgen_used_X in Heqo0; eauto.
+                eapply list_max_ge_in in H0; eauto. lia.
              ++ rewrite max_l in H0 by lia.
-                apply H1 in H0 as H'.
-                rewrite in_app_iff in H'.
-                eapply list_max_ge_in in H0; eauto.
-                destruct H' as [H' | H'];
-                  eapply list_max_ge_in in H'; eauto; lia.
+                eapply cgen_used_X in Heqo0; eauto.
+                eapply list_max_ge_in in H0; eauto. lia.
           -- rewrite max_l with (n:=list_max l1) in H0 by lia.
              destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
              ++ rewrite max_r in H0 by lia.
-                eapply H1 in H0 as H'; eauto.
-                eapply list_max_ge_in in H0; eauto.
-                rewrite in_app_iff in H'.
-                destruct H' as [H' | H'];
-                  eapply list_max_ge_in in H'; eauto; lia.
+                eapply cgen_used_X in Heqo0; eauto.
+                eapply list_max_ge_in in H0; eauto. lia.
              ++ rewrite max_l in H0 by lia.
-                eapply H1 in H0 as H'; eauto.
-                eapply list_max_ge_in in H0; eauto.
-                rewrite in_app_iff in H'.
-                destruct H' as [H' | H'];
-                  eapply list_max_ge_in in H'; eauto; lia.
+                eapply cgen_used_X in Heqo0; eauto.
+                eapply list_max_ge_in in H0; eauto. lia.
         * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
           -- rewrite max_r with (n:=list_max l1) in H by lia.
              destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
              ++ rewrite max_r in H by lia.
-                apply H2 in H as H'.
+                apply H1 in H as H'.
                 rewrite in_app_iff in H'.
                 eapply list_max_ge_in in H; eauto.
                 destruct H' as [H' | H'];
                   eapply list_max_ge_in in H'; eauto; lia.
              ++ rewrite max_l in H by lia.
-                apply H2 in H as H'.
+                apply H1 in H as H'.
                 rewrite in_app_iff in H'.
                 eapply list_max_ge_in in H; eauto.
                 destruct H' as [H' | H'];
@@ -479,13 +450,13 @@ Section CGEN.
           -- rewrite max_l with (n:=list_max l1) in H by lia.
              destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
              ++ rewrite max_r in H by lia.
-                eapply H2 in H as H'; eauto.
+                eapply H1 in H as H'; eauto.
                 eapply list_max_ge_in in H; eauto.
                 rewrite in_app_iff in H'.
                 destruct H' as [H' | H'];
                   eapply list_max_ge_in in H'; eauto; lia.
              ++ rewrite max_l in H by lia.
-                eapply H2 in H as H'; eauto.
+                eapply H1 in H as H'; eauto.
                 eapply list_max_ge_in in H; eauto.
                 rewrite in_app_iff in H'.
                 destruct H' as [H' | H'];
@@ -494,28 +465,57 @@ Section CGEN.
           -- rewrite max_r with (n:=list_max l1) in H0 by lia.
              destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
              ++ rewrite max_r in H0 by lia.
-                eapply cgen_Ctvars in Heqo as H'; eauto.
-                apply H' in H0 as H0'.
-                rewrite in_app_iff in H0'.
-                destruct H0' as [H'' | H''];
-                  eapply list_max_ge_in in H''; eauto; lia.
+                apply H2 in H0 as H'.
+                rewrite in_app_iff in H'.
+                eapply list_max_ge_in in H0; eauto.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
              ++ rewrite max_l in H0 by lia.
-                eapply cgen_Ctvars in Heqo as H'; eauto.
-                eapply H' in H0 as H0'.
-                rewrite in_app_iff in H0'.
-                destruct H0' as [H'' | H''];
-                  eapply list_max_ge_in in H''; eauto; lia.
+                apply H2 in H0 as H'.
+                rewrite in_app_iff in H'.
+                eapply list_max_ge_in in H0; eauto.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
           -- rewrite max_l with (n:=list_max l1) in H0 by lia.
              destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
              ++ rewrite max_r in H0 by lia.
+                eapply H2 in H0 as H'; eauto.
+                eapply list_max_ge_in in H0; eauto.
+                rewrite in_app_iff in H'.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+             ++ rewrite max_l in H0 by lia.
+                eapply H2 in H0 as H'; eauto.
+                eapply list_max_ge_in in H0; eauto.
+                rewrite in_app_iff in H'.
+                destruct H' as [H' | H'];
+                  eapply list_max_ge_in in H'; eauto; lia.
+        * destruct (le_lt_dec (list_max l1) (list_max used)) as [Hl1 | Hused].
+          -- rewrite max_r with (n:=list_max l1) in H by lia.
+             destruct (le_lt_dec (list_max l) (list_max used)) as [Hl | Hused].
+             ++ rewrite max_r in H by lia.
                 eapply cgen_Ctvars in Heqo as H'; eauto.
-                eapply H' in H0 as H0'.
+                apply H' in H as H0'.
                 rewrite in_app_iff in H0'.
                 destruct H0' as [H'' | H''];
                   eapply list_max_ge_in in H''; eauto; lia.
-             ++ rewrite max_l in H0 by lia.
+             ++ rewrite max_l in H by lia.
                 eapply cgen_Ctvars in Heqo as H'; eauto.
-                eapply H' in H0 as H0'.
+                eapply H' in H as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+          -- rewrite max_l with (n:=list_max l1) in H by lia.
+             destruct (le_lt_dec (list_max l) (list_max l1)) as [Hl | Hl1].
+             ++ rewrite max_r in H by lia.
+                eapply cgen_Ctvars in Heqo as H'; eauto.
+                eapply H' in H as H0'.
+                rewrite in_app_iff in H0'.
+                destruct H0' as [H'' | H''];
+                  eapply list_max_ge_in in H''; eauto; lia.
+             ++ rewrite max_l in H by lia.
+                eapply cgen_Ctvars in Heqo as H'; eauto.
+                eapply H' in H as H0'.
                 rewrite in_app_iff in H0'.
                 destruct H0' as [H'' | H''];
                   eapply list_max_ge_in in H''; eauto; lia.
@@ -580,7 +580,7 @@ Section CGEN.
 
   Theorem cgen_sound_clean : forall e t X C,
       cgen [] [] ∅%env e = Some (t,X,C) ->
-      ∅%env ⊢ e ∈ t ⊣ X @ C.
+      ∅%env ⊢ e ∴ t ⊣ X ≀ C.
   Proof.
     intros e t X C H.
     eapply cgen_sound; eauto.
@@ -625,7 +625,7 @@ Section CGEN.
   Theorem cgen'_sound : forall e used g t X C,
       cgen' used g e = Some (t,X,C) ->
       (forall x t, g x = Some t -> (tvars t ⊆ used)%set) ->
-      g ⊢ e ∈ t ⊣ X @ C.
+      g ⊢ e ∴ t ⊣ X ≀ C.
   Proof.
     intros e used g t X C H Hg.
     rewrite <- cgen_cgen' with (u := used) in H.
@@ -635,7 +635,7 @@ Section CGEN.
 
   Theorem cgen'_sound_clean : forall e t X C,
       cgen' [] ∅%env e = Some (t,X,C) ->
-      ∅%env ⊢ e ∈ t ⊣ X @ C.
+      ∅%env ⊢ e ∴ t ⊣ X ≀ C.
   Proof.
     intros e t X C H.
     erewrite <- cgen_cgen' in H; eauto.
@@ -652,7 +652,7 @@ Section CGEN.
   Local Hint Resolve tsub_empty : core.
   
   Lemma cgen_complete : forall Γ e τ X C,
-      Γ ⊢ e ∈ τ ⊣ X @ C ->
+      Γ ⊢ e ∴ τ ⊣ X ≀ C ->
       forall g σ,
         (σ × g = Γ)%env ->
         forall used,

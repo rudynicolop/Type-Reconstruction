@@ -32,7 +32,7 @@ Section Complete.
   Local Hint Constructors Permutation : core.
 
   Lemma tvars_subset : forall Γ e τ X C,
-      Γ ⊢ e ∈ τ ⊣ X @ C -> (Ctvars C ⊆ X)%set.
+      Γ ⊢ e ∴ τ ⊣ X ≀ C -> (Ctvars C ⊆ X)%set.
   Proof.
     intros g e t X C H; induction H;
       simpl; try firstorder.
@@ -71,12 +71,12 @@ Section Complete.
       It seems his form of completenss is impossible
       with this... *)
   Theorem complete_weak : forall Γ e t X C,
-    Γ ⊢ e ∈ t ⊣ X @ C ->
-    forall σ τ,
-      (σ × Γ)%env ⊨ e ∈ τ ->
-      (forall m, In m X -> σ m = None) ->
-      exists σ', Forall (uncurry (satisfy σ')) C /\
-            (σ' † t = τ)%typ /\ (σ' ∉ X = σ)%env.
+      Γ ⊢ e ∴ t ⊣ X ≀ C ->
+      forall σ τ,
+        (σ × Γ)%env ⊨ e ∴ τ ->
+        (forall m, In m X -> σ m = None) ->
+        exists σ', Forall (uncurry (satisfy σ')) C /\
+              (σ' † t = τ)%typ /\ (mask σ' X = σ)%env.
   Proof.
     intros g e τ X C H; induction H;
       intros s t Ht Hd; inv Ht;
@@ -117,19 +117,7 @@ Section Complete.
           try contradiction; simpl; reflexivity.
       + extensionality Y; unfold "∉"; simpl.
         destruct (equiv_dec Y T) as [HYT | HYT];
-          unfold equiv, complement in *; subst.
-        * symmetry; apply Hd; intuition.
-        * destruct (member Y (X1 ∪ X2))%set eqn:HYmem;
-            simpl; auto.
-          -- symmetry; apply Hd. 
-             right; auto using member_In.
-          -- assert (HY1: member Y X1 = false).
-             rewrite Not_In_member_iff in *.
-             intuition. rewrite HY1.
-             assert (HY2: member Y X2 = false).
-             rewrite Not_In_member_iff in *.
-             intuition. rewrite HY2.
-             reflexivity.
+          unfold equiv, complement in *; subst. admit. admit.
     - apply IHconstraint_typing1 in H8 as IH1;
         [ clear IHconstraint_typing1 H8 | intuition ].
       apply IHconstraint_typing2 in H10 as IH2;
@@ -152,7 +140,7 @@ Section Complete.
         * repeat rewrite Forall_app; repeat split.
           (* Requires induction...*) admit. admit. admit.
       + (* Nope. *) admit.
-      + extensionality Y; unfold "∉"; simpl.
+      + extensionality Y; unfold mask; simpl.
         destruct (member Y (X1 ∪ X2 ∪ X3)%set) eqn:HYmem.
         * symmetry; apply Hd; auto using member_In.
         * assert (HY123:
