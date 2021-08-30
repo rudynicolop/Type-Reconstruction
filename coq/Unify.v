@@ -62,12 +62,22 @@ Section ComputeUnify.
       rewrite uniques_app.
       apply typ_eq_eq in Heq; subst.
       rewrite uniques_app_same.
-      admit.
+      rewrite <- uniques_app.
+      rewrite length_uniques_app.
+      rewrite uniques_app_diff.
+      rewrite app_length.
+      destruct (length (uniques (tvars r) ∖ Ctvars C')%set)
+        as [| len].
+      + rewrite Nat.add_0_r. right.
+        pose proof typ_size_non_zero r. lia.
+      + left. lia.
+    - intros ? ? C' ? ? ? R ? ? ? _ _;
+        subst; autounfold with core; simpl. admit.
     - admit.
     - admit.
     - admit.
-    - admit.
-    - admit.
+    - intros ? ? C' ? r L ? ? ? Hteq Hmem;
+        subst; autounfold with core; simpl. admit.
     - Check wf_lt_pair. admit.
-  Admitted.
+  Abort.
 End ComputeUnify.

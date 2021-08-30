@@ -235,6 +235,163 @@ Section Uniques.
     destruct (equiv_dec a a);
       unfold equiv, complement in *; try contradiction; auto.
   Qed.
+
+  Fixpoint count (a : A) (l : list A) : nat :=
+    match l with
+    | []    => 0
+    | h :: l => (if h == a then 1 else 0) + count a l
+    end.
+
+  Lemma count_app : forall l r a,
+      count a (l ++ r) = count a l + count a r.
+  Proof.
+    intro l; induction l as [| h l IHl]; intros r a; simpl; auto.
+    rewrite IHl. rewrite PeanoNat.Nat.add_assoc. reflexivity.
+  Qed.
+  
+  Lemma count_remove : forall l a, count a (remove a l) = 0.
+  Proof.
+    intro l; induction l as [| h l IHl]; intro a; simpl; auto.
+    rewrite count_app. rewrite IHl.
+    destruct (equiv_dec h a) as [Hha | Hha];
+      unfold equiv, complement in *; subst; simpl; auto.
+    destruct (equiv_dec h a);
+      unfold equiv, complement in *; subst; simpl; try contradiction; auto.
+  Qed.
+
+  Lemma count_remove_le : forall l a x,
+      count a (remove x l) <= count a l.
+  Proof.
+    intro l; induction l as [| h l IHl]; intros a x; simpl; try lia.
+    specialize IHl with (a := a) (x := x).
+    destruct (equiv_dec h x); destruct (equiv_dec h a);
+      unfold equiv, complement in *; subst; simpl; try lia.
+    - destruct (equiv_dec a a); try lia.
+    - destruct (equiv_dec h a);
+        unfold equiv, complement in *; subst; try contradiction; lia.
+  Qed.
+
+  Lemma count_uniques : forall l a,
+      count a (uniques l) <= 1.
+  Proof.
+    intro l; induction l as [| h l IHl]; intro a; simpl; auto.
+    specialize IHl with a.
+    destruct (equiv_dec h a) as [Hha | Hha];
+      unfold equiv, complement in *; subst; simpl.
+    - rewrite count_remove. lia.
+    - pose proof count_remove_le (uniques l) a h as Hle. lia.
+  Qed.
+
+  Lemma count_in : forall l a,
+      In a l <-> count a l > 0.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intro a; simpl; split; intros H; try lia.
+    - destruct (equiv_dec h a);
+        unfold equiv, complement in *; subst; simpl; try lia.
+      firstorder.
+    - destruct (equiv_dec h a);
+        unfold equiv, complement in *; subst; simpl; firstorder.
+  Qed.
+
+  Lemma count_not_in : forall l a,
+      ~ In a l <-> count a l = 0.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intro a; simpl; split; intros H; try lia.
+    - apply Decidable.not_or in H as [Hha Hal].
+      destruct (equiv_dec h a);
+        unfold equiv, complement in *; subst; simpl;
+          try contradiction; firstorder.
+    - destruct (equiv_dec h a);
+        unfold equiv, complement in *; subst; simpl;
+          intros [? | ?]; subst;
+            try contradiction; try discriminate.
+      firstorder.
+  Qed.
+
+  Lemma count_length_le : forall l a,
+      count a l <= length l.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intro a; simpl; try lia.
+    specialize IHl with a.
+    destruct (equiv_dec h a); simpl; try lia.
+  Qed.
+  
+  Lemma count_remove_length : forall l a,
+      length (remove a l) = length l - count a l.
+  Proof.
+    intro l; induction l as [| h l IHl]; intro a; simpl; auto.
+    destruct (equiv_dec h a);
+      unfold equiv, complement in *; subst; simpl; auto.
+    destruct (count a l) as [| n] eqn:Hcnt.
+    - rewrite <- count_not_in in Hcnt.
+      rewrite remove_not_in by assumption. reflexivity.
+    - rewrite IHl. rewrite Hcnt.
+      pose proof count_length_le l a as HCL. lia.
+  Qed.
+
+  Lemma count_fold_remove_length : forall r l,
+      length (fold_right remove l r) =
+      length l - fold_right Nat.add 0 (map (fun a => count a r) l).
+  Proof.
+    intro r; induction r as [| x r IHr];
+      intro l; induction l as [| h l IHl];
+        simpl in *; auto.
+    - destruct (fold_right Nat.add 0 (map (fun _ : A => 0) l))
+        as [| n] eqn:Heqfr; simpl; auto.
+      rewrite IHl at 1.
+      destruct l; simpl in *; try lia.
+    - rewrite count_remove_length.
+      rewrite IHr; simpl; reflexivity.
+    - rewrite count_remove_length.
+      destruct (equiv_dec x h) as [Hxh | Hxh];
+        unfold equiv, complement in *; subst; simpl in *.
+      + rewrite IHr; simpl.
+        destruct
+          (count h r + fold_right Nat.add 0 (map (fun a : A => count a r) l))
+          as [| n] eqn:Heqcntfr; simpl.
+        * destruct (count h (fold_right remove (h :: l) r))
+            as [| m] eqn:Hcntfr; simpl.
+          -- admit.
+          -- admit.
+        * admit.
+      + admit.
+  Abort.
+    
+  Lemma count_repeat : forall n a,
+      count a (repeat a n) = n.
+  Proof.
+    intro n; induction n as [| n IHn]; intro a; simpl; auto.
+    rewrite IHn.
+    destruct (equiv_dec a a);
+      unfold equiv, complement in *; try contradiction; auto.
+  Qed.
+
+  Local Hint Constructors Permutation : core.
+
+  Lemma remove_perm : forall l l',
+      Permutation l l' -> forall a, Permutation (remove a l) (remove a l').
+  Proof.
+    intros l l' H; induction H; intro a; simpl; eauto.
+    - destruct (equiv_dec x a) as [Hxa | Hxa];
+        unfold equiv, complement in *; subst; simpl; auto.
+    - destruct (equiv_dec y a); destruct (equiv_dec x a);
+        unfold equiv, complement in *; subst; simpl; auto.
+  Qed.
+
+  Local Hint Resolve remove_perm : core.
+  
+  Lemma uniques_perm : forall l l',
+      Permutation l l' -> Permutation (uniques l) (uniques l').
+  Proof.
+    intros l l' H; induction H; simpl; eauto 3.
+    rewrite remove_comm.
+    destruct (equiv_dec x y); destruct (equiv_dec y x);
+      unfold equiv, complement in *; subst;
+        try contradiction; simpl; auto.
+  Qed.
 End Uniques.
 
 Section Sets.
@@ -584,15 +741,73 @@ Section Sets.
     intuition.
   Qed.
 
+  Corollary uniques_app_diff : forall l r: list A,
+      uniques (l ++ r) = uniques l ++ difference (uniques r) l.
+  Proof.
+    intros l r. rewrite uniques_app2.
+    f_equal. rewrite remove_diff. reflexivity.
+  Qed.
+
   Corollary uniques_app_same : forall l : list A,
       uniques (l ++ l) = uniques l.
   Proof.
-    intros l. rewrite uniques_app2.
-    rewrite remove_diff.
+    intros l. rewrite uniques_app_diff.
     rewrite Subset_difference by auto using uniques_sound.
     apply app_nil_r.
   Qed.
 
+  Lemma difference_app_l : forall l1 l2 r : list A,
+      difference (l1 ++ l2) r = difference l1 r ++ difference l2 r.
+  Proof.
+    intro l1; induction l1 as [| h1 l1 IHl1];
+      intros l2 r; simpl; auto.
+    rewrite IHl1. apply app_assoc.
+  Qed.
+
+  Lemma difference_app_r_comm : forall l r1 r2 : list A,
+      difference l (r1 ++ r2) = difference l (r2 ++ r1).
+  Proof.
+    intro l; induction l as [| h l IHl]; intros r1 r2; simpl; auto.
+    repeat rewrite member_app_or.
+    rewrite orb_comm. rewrite IHl. reflexivity.
+  Qed.
+
+  Lemma difference_app_r_assoc : forall l r1 r2 : list A,
+      difference (difference l r1) r2 = difference l (r1 ++ r2).
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intros r1 r2; simpl; auto.
+    rewrite member_app_or.
+    destruct (member h r1) eqn:Hmemhr1; simpl; auto.
+    rewrite IHl. reflexivity.
+  Qed.
+
+  Lemma length_diff : forall l r : list A,
+      length (difference l r) +
+      fold_right Nat.add 0 (map (fun a => count a l) r) = length l.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intro r; induction r as [| x r IHr];
+        simpl; auto.
+    - rewrite PeanoNat.Nat.add_0_r.
+      rewrite diff_empty_r. reflexivity.
+    - destruct (equiv_dec h x) as [Hhx | Hhx];
+        unfold equiv, complement in *; subst; simpl.
+      + rewrite remove_diff_cons.
+        rewrite count_remove_length.
+  Abort.
+
+  Local Hint Resolve Permutation_app_comm : core.
+  
+  Lemma length_uniques_app : forall l r : list A,
+      length (uniques (l ++ r)) = length (uniques (r ++ l)).
+  Proof.
+    intros l r.
+    assert (Permutation (uniques (l ++ r)) (uniques (r ++ l)))
+      by eauto using uniques_perm.
+    auto using Permutation_length.
+  Qed.
+  
   Local Hint Resolve Union_Subset_l : core.
   Local Hint Resolve Union_Subset_r : core.
   Local Hint Resolve Inter_Subset_l : core.
