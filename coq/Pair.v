@@ -3,7 +3,7 @@ Require Import Coq.Relations.Relation_Operators
         Coq.Wellfounded.Lexicographic_Product
         Coq.Logic.FunctionalExtensionality Wf_nat.
 
-Reserved Notation "x ≺ y" (at level 70, no associativity).
+Reserved Notation "x ⊏ y" (at level 70, no associativity).
 Reserved Notation "x ≤ y" (at level 70, no associativity).
 
 Section Prod.
@@ -65,12 +65,12 @@ Definition lt_pair_le
 
 Definition lt_pair : nat * nat -> nat * nat -> Prop := lex_prod lt lt.
 
-Notation "p1 ≺ p2" := (lt_pair p1 p2) : type_scope.
+Notation "p1 ⊏ p2" := (lt_pair p1 p2) : type_scope.
 
 Lemma lt_pair_spec : forall p p' : nat * nat,
-    p ≺ p' <-> lt_pair_le p p'.
+    p ⊏ p' <-> lt_pair_le p p'.
 Proof.
-  intros [m n] [m' n']; unfold "≺", lt_pair_le, "≤", lex_prod.
+  intros [m n] [m' n']; unfold "⊏", lt_pair_le, "≤", lex_prod.
   split; intros H; inv H.
   - left; assumption.
   - right; assumption.

@@ -38,26 +38,8 @@ Fixpoint typ_size (t : typ) : nat :=
   | (t → t')%typ => 1 + typ_size t + typ_size t'
   end.
 
-(** Want an ordering such that,
-    let m be # of unique type vars,
-    & n be the size,
-    (m,n) < (m',n') iff
-    m < m' \/ m = m' /\ n < n'.
-
-    let (m,n) = n % m.
-
-    Is (9,5) < (8,6)?
-
-    5 % 9 = 5
-    6 % 8 = 6.
-
-    No...
-    *)
-
-Definition typ_size_vars (t : typ) : nat :=
-  let i := length (remove_dups (tvars t)) in
-  let j := typ_size t in
-  i * (1 + i) + j.
+Definition typ_size_vars (t : typ) : nat * nat :=
+  (length (remove_dups (tvars t)), typ_size t).
 
 Definition Ctvars : list (typ * typ) -> list nat :=
   fold_right (fun '(l,r) acc => tvars l ++ tvars r ++ acc) [].
@@ -65,10 +47,8 @@ Definition Ctvars : list (typ * typ) -> list nat :=
 Definition C_size : list (typ * typ) -> nat :=
   fold_right (fun '(l,r) acc => typ_size l + typ_size r + acc) 0.
 
-Definition C_size_vars (C : list (typ * typ)) : nat :=
-  let i := length (remove_dups (Ctvars C)) in
-  let j := C_size C in
-  i * (1 + i) + j.
+Definition C_size_vars (C : list (typ * typ)) : nat * nat :=
+  (length (remove_dups (Ctvars C)), C_size C).
     
 Section TypEq.
   Lemma typ_eq_reflexive : forall t, typ_eq t t = true.
@@ -96,16 +76,6 @@ Section TypSize.
     typ_size t > 0.
   Proof.
     intro t; induction t; simpl; lia.
-  Qed.
-
-  (*Lemma typ_size_arrow_left : forall l r,
-      typ_size (l → r)%typ*)  
-  
-  Lemma typ_size_vars_non_zero : forall t,
-      typ_size_vars t > 0.
-  Proof.
-    intros t; unfold typ_size_vars.
-    pose proof typ_size_non_zero t; lia.
   Qed.
 End TypSize.
 
