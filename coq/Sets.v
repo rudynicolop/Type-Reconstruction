@@ -212,8 +212,6 @@ Section Uniques.
     rewrite IHl. f_equal.
     destruct (equiv_dec h a); reflexivity.
   Qed.
-
-  Check fold_right.
   
   Lemma uniques_app2 : forall l r,
       uniques (l ++ r) = uniques l ++ fold_right remove (uniques r) l.
@@ -224,28 +222,19 @@ Section Uniques.
     rewrite remove_app. reflexivity.
   Qed.
 
-  Lemma fold_right_uniques_remove : forall l,
-      fold_right remove (uniques l) l = [].
+  Lemma uniques_repeat : forall n a,
+      uniques (repeat a n) =
+      match n with
+      | O   => []
+      | S _ => [a]
+      end.
   Proof.
-    intro l; induction l as [| a l IHl]; simpl; auto.
-  Abort.
-  
-  Corollary uniques_app_same : forall l,
-      uniques (l ++ l) = uniques l.
-  Proof.
-    intros l. rewrite uniques_app2.
-    induction l as [| a l IHl]; simpl; auto.
-    f_equal.
-  Abort.
-
-  Lemma uniques_rev : forall l,
-      rev (uniques l) = uniques (rev l).
-  Proof.
-    intro l; induction l as [| h l IHl]; simpl; auto.
-    rewrite remove_rev. rewrite IHl.
-    rewrite remove_uniques_comm.
-    rewrite uniques_app; simpl.
-  Abort.
+    intro n; induction n as [| n IHn];
+      intro a; simpl; auto.
+    rewrite IHn. destruct n; simpl; auto.
+    destruct (equiv_dec a a);
+      unfold equiv, complement in *; try contradiction; auto.
+  Qed.
 End Uniques.
 
 Section Sets.
@@ -368,6 +357,14 @@ Section Sets.
     intros d d' HP l r HD a;
       pose proof HD a as [Had Halr]; split; eauto.
   Qed.
+
+  Lemma Subset_Diff : forall l r,
+      Subset l r ->
+      Difference l r [].
+  Proof.
+    unfold Subset, Difference.
+    intros l r Hs a; simpl; intuition.
+  Qed.
   
   Lemma append_Union : forall l r, Union l r (l ++ r).
   Proof.
@@ -461,211 +458,6 @@ Section Sets.
         rewrite in_app_iff. intuition.
   Qed.
 
-  Fixpoint remove_dups (l : list A) : list A :=
-    match l with
-    | [] => []
-    | a :: l => (if member a l then [] else [a]) ++ remove_dups l
-    end.
-
-  Lemma remove_dups_sound : forall l a,
-      In a (remove_dups l) -> In a l.
-  Proof.
-    intro l;
-      induction l as [| h t IHt];
-      intros a HIn; simpl in *; auto.
-    destruct (member h t) eqn:Hmemht; simpl in *; intuition.
-  Qed.
-
-  Lemma remove_dups_complete: forall l a,
-      In a l -> In a (remove_dups l).
-  Proof.
-    intro l;
-      induction l as [| h t IHt];
-      intros a HIn; simpl in *; auto.
-    destruct HIn as [Hha | HInat]; subst.
-    - destruct (member a t) eqn:Hmemat; simpl; auto.
-    - rewrite in_app_iff; auto.
-  Qed.
-
-  Local Hint Resolve remove_dups_sound : core.
-  Local Hint Resolve remove_dups_complete : core.
-  
-  Lemma remove_dups_iff : forall a l,
-      In a (remove_dups l) <-> In a l.
-  Proof.
-    intuition.
-  Qed.
-
-  Local Hint Constructors NoDup : core.
-  
-  Lemma remove_dups_NoDup : forall l,
-      NoDup (remove_dups l).
-  Proof.
-    intro l;
-      induction l as [| a l IHl]; simpl in *; auto.
-    destruct (member a l) eqn:Hmemal; simpl; auto.
-    rewrite Not_In_member_iff in Hmemal; auto.
-  Qed.
-
-  Lemma remove_dups_length : forall l : list A,
-      length (remove_dups l) <= length l.
-  Proof.
-    intro l; induction l as [| h t IHt];
-      simpl; try lia.
-    rewrite app_length.
-    destruct (member h t) eqn:Hmem; simpl; lia.
-  Qed.
-
-  Lemma remove_dups_idempotent : forall l : list A,
-      remove_dups (remove_dups l) = remove_dups l.
-  Proof.
-    intro l; induction l as [| h t IHt]; simpl; auto.
-    destruct (member h t) eqn:Hmemht; simpl; auto.
-    assert (Hmem': member h (remove_dups t) = false).
-    { rewrite Not_In_member_iff in *.
-      auto using remove_dups_sound. }
-    rewrite Hmem'; simpl; f_equal; assumption.
-  Qed.
-
-  Lemma remove_dups_in_split : forall l a,
-      In a l ->
-      exists l1 l2, ~ In a l1 /\ ~ In a l2 /\
-               remove_dups l = remove_dups l1 ++ a :: remove_dups l2.
-  Proof.
-    intro l; induction l as [| h t IHt];
-      intros a Hal; simpl in *; try contradiction.
-    pose proof In_member_reflects a t as Hat; inv Hat;
-      destruct (equiv_dec h a) as [Hha | Hha];
-      unfold equiv, complement in *;
-      destruct Hal as [Hal | Hal]; subst;
-        try contradiction.
-    - apply IHt in H0 as (l1 & l2 & Hl1 & Hl2 & Hrd).
-      rewrite <- H; simpl; eauto.
-    - apply IHt in Hal as (l1 & l2 & Hl1 & Hl2 & Hrd).
-      rewrite <- H; simpl; eauto.
-    - apply IHt in Hal as (l1 & l2 & Hl1 & Hl2 & Hrd).
-      pose proof In_member_reflects h t as Hht;
-        inv Hht; simpl; eauto.
-      exists (h :: l1). exists l2. simpl. rewrite Hrd.
-      intuition.
-      assert (Hmem: member h l1 = false).
-      { rewrite Not_In_member_iff.
-        intros HIn.
-        apply remove_dups_complete in HIn.
-        assert (H': In h (remove_dups l1 ++ a :: remove_dups l2)).
-        { rewrite in_app_iff. intuition. }
-        rewrite <- Hrd in H'.
-        apply remove_dups_sound in H'.
-        contradiction. }
-      rewrite Hmem; simpl. reflexivity.
-    - rewrite <- H. exists []. exists t. intuition.
-  Qed.
-
-  Lemma remove_dups_disjoint_app : forall l r : list A,
-      Disjoint l r ->
-      remove_dups (l ++ r) =
-      remove_dups l ++ remove_dups r.
-  Proof.
-    unfold Disjoint, Intersection.
-    intro l; induction l as [| a l IHl];
-      intros r Hd; simpl in *; auto.
-    rewrite member_app_or.
-    pose proof In_member_reflects a l as Hal; inv Hal; simpl.
-    - apply IHl. intros a'.
-      specialize Hd with a'. intuition.
-    - pose proof In_member_reflects a r as Har; inv Har; simpl.
-      + admit.
-      + f_equal. apply IHl. intros a'.
-        specialize Hd with a'. intuition.
-  Abort.
-
-  Lemma fold_right_remove_subset : forall r l : list A,
-      Subset l r ->
-      fold_right remove l r = [].
-  Proof.
-    unfold Subset.
-    intro r; induction r as [| a r IHr];
-      intros l H; simpl.
-    - destruct l as [| a l]; auto.
-      assert (Haal : In a (a :: l)) by intuition.
-      firstorder.
-    - rewrite IHr; simpl; auto.
-      intros x Hxl. apply H in Hxl.
-      simpl in Hxl.
-  Abort.
-  
-  Lemma uniques_disjoint_app : forall l r : list A,
-      Disjoint l r ->
-      uniques (l ++ r) = uniques l ++ uniques r.
-  Proof.
-    intros l r HD. rewrite uniques_app2.
-  Abort.
-  
-  Lemma remove_dups_app : forall l r : list A,
-      remove_dups (l ++ r) =
-      remove_dups (remove_dups l ++ remove_dups r).
-  Proof.
-    intro l; induction l as [| a l IHl]; intro r; simpl.
-    - rewrite remove_dups_idempotent; reflexivity.
-    - pose proof (In_member_reflects a l) as Hal; inv Hal; simpl.
-      + assert (Halr: member a (l ++ r) = true).
-        { apply In_member.
-          rewrite in_app_iff. intuition. }
-        rewrite Halr; simpl; auto.
-      + pose proof (In_member_reflects a r) as Har; inv Har; simpl.
-        * assert (Halr: member a (l ++ r) = true).
-          { apply In_member.
-            rewrite in_app_iff. intuition. }
-          rewrite Halr; simpl.
-          assert (Halr': member a (remove_dups l ++ remove_dups r) = true).
-          { apply In_member. rewrite in_app_iff.
-            auto using remove_dups_complete. }
-          rewrite Halr'; simpl; auto.
-        * assert (Halr: member a (l ++ r) = false).
-          { rewrite Not_In_member_iff.
-            rewrite in_app_iff. intuition. }
-          rewrite Halr; simpl.
-          assert (Halr': member a (remove_dups l ++ remove_dups r) = false).
-          { apply Not_In_member_iff. rewrite in_app_iff.
-            Local Hint Resolve remove_dups_sound : core.
-            intuition. }
-          rewrite Halr'; simpl; f_equal; auto.
-  Qed.
-
-  Lemma remove_dups_app_length : forall l r : list A,
-      length (remove_dups (l ++ r)) <=
-      length (remove_dups l) + length (remove_dups r).
-  Proof.
-    intro l; induction l as [| a l IHl]; intro r; simpl; try lia.
-    repeat rewrite app_length.
-    pose proof (In_member_reflects a l) as Hal; inv Hal; simpl.
-    - assert (Halr: member a (l ++ r) = true).
-      { apply In_member. rewrite in_app_iff. intuition. }
-      rewrite Halr; simpl; auto.
-    - pose proof (In_member_reflects a (l ++ r)) as Halr;
-        inv Halr; simpl; pose proof IHl r; lia.
-  Qed.
-
-  Lemma remove_dups_length_perm : forall l l',
-      Permutation l l' ->
-      length (remove_dups l) = length (remove_dups l').
-  Proof.
-    intros l l' HP; induction HP; simpl; try lia.
-    - repeat rewrite app_length. rewrite IHHP.
-      pose proof In_member_reflects x l as Hxl; inv Hxl.
-      + assert (HIn: In x l') by eauto.
-        assert (Hmem: member x l' = true) by auto.
-        rewrite Hmem. reflexivity.
-      + assert (HIn: ~ In x l') by eauto.
-        rewrite <- Not_In_member_iff in HIn.
-        rewrite HIn. reflexivity.
-    - repeat rewrite app_length.
-      destruct (equiv_dec y x) as [Hyx | Hyx];
-        destruct (equiv_dec x y) as [Hxy | Hxy];
-        unfold equiv, complement in *;
-        subst; try contradiction; simpl; try lia.
-  Qed.
-
   Lemma member_repeat : forall n a,
       member a (repeat a n) =
       match n with
@@ -677,103 +469,6 @@ Section Sets.
     destruct (equiv_dec a a);
       unfold equiv, complement in *; try contradiction; auto.
   Qed.
-
-  Lemma remove_dups_repeat : forall n a,
-      remove_dups (repeat a n) =
-      match n with
-      | O => []
-      | S _ => [a]
-      end.
-  Proof.
-    intro n; induction n as [| n IHn]; intro a; simpl; auto.
-    rewrite member_repeat, IHn.
-    destruct n; reflexivity.
-  Qed.
-
-  Lemma remove_dups_length_app_l : forall l r,
-      length (remove_dups l) <= length (remove_dups (l ++ r)).
-  Proof.
-    intro l; induction l as [| a l IHl];
-      intros r; simpl; try lia.
-    rewrite member_app_or.
-    destruct (member a l) eqn:Hal; simpl; auto.
-    destruct (member a r) eqn:Har; simpl.
-    - assert (HInar: In a r) by auto.
-      apply In_split_repeat_perm in HInar
-        as (n & r' & Hr' & HP).
-      rewrite remove_dups_length_perm
-        with (l := l ++ r)
-             (l' := repeat a (S n) ++ l ++ r').
-      + rewrite remove_dups_app.
-        rewrite remove_dups_repeat; simpl.
-        assert (H': ~ In a (remove_dups (l ++ r'))).
-        { intros H'. apply remove_dups_sound in H'.
-          rewrite in_app_iff in H'. intuition.
-          rewrite Not_In_member_iff in Hal.
-          contradiction. }
-        rewrite <- Not_In_member_iff in H'.
-        rewrite H'. rewrite app_length; simpl.
-        rewrite remove_dups_idempotent.
-        specialize IHl with (r := r'). lia.
-      + apply perm_trans
-          with (l' := l ++ (repeat a (S n) ++ r')).
-        * auto using Permutation_app_head.
-        * auto using Permutation_app_swap_app.
-    - specialize IHl with r. lia.
-  Qed.
-
-  Lemma remove_dups_length_app_r : forall l r,
-      length (remove_dups r) <= length (remove_dups (l ++ r)).
-  Proof.
-    intros l r.
-    rewrite remove_dups_length_perm
-      with (l := l ++ r) (l' := r ++ l)
-      by auto using Permutation_app_comm.
-    apply remove_dups_length_app_l.
-  Qed.
-
-  Lemma In_exists_first : forall (l : list A) (a : A),
-      In a l -> exists l1 l2, ~ In a l1 /\ l = l1 ++ a :: l2.
-  Proof.
-    intro l; induction l as [| h t IHt];
-      intros a Hal; simpl in *.
-    - firstorder.
-    - pose proof (equiv_dec h a) as [Hha | Hha];
-        unfold equiv, complement in *; subst;
-      pose proof in_dec HEA a t as [Hat | Hat];
-      destruct Hal as [? | Hat']; subst; try contradiction.
-      + exists []. exists t. intuition.
-      + exists []. exists t. intuition.
-      + exists []. exists t. intuition.
-      + apply IHt in Hat' as (l1 & l2 & Hal1 & Htl1l2); subst.
-        exists (h :: l1). exists l2. firstorder.
-  Qed.
-      
-  Lemma remove_dups_rev : forall l : list A,
-      remove_dups (rev l) = rev (remove_dups l).
-  Proof.
-    intro l; induction l as [| a l IHl]; simpl; auto.
-    pose proof (In_member_reflects a l) as Hal; inv Hal; simpl.
-    - rewrite <- IHl.
-      apply In_exists_first in H0 as (l1 & l2 & Hal1 & Heq); subst.
-      rewrite rev_app_distr; simpl.
-  Abort.
-
-  Lemma remove_dups_app_same : forall l : list A,
-      remove_dups (l ++ l) = rev (remove_dups l).
-  Proof.
-    intro l; induction l as [| a l IHl]; simpl; auto.
-    rewrite member_app_or; simpl.
-    destruct (equiv_dec a a) as [? | ?];
-      unfold equiv, complement in *; try contradiction.
-    rewrite orb_true_r; simpl.
-    pose proof (In_member_reflects a l) as HR; inv HR; simpl.
-    - rewrite remove_dups_app; simpl.
-      rewrite <- H; simpl.
-      rewrite <- remove_dups_app. assumption.
-    - rewrite remove_dups_app; simpl.
-      rewrite <- H; simpl.
-  Abort.
   
   Fixpoint intersect (l r : list A) : list A :=
     match l with
@@ -871,6 +566,31 @@ Section Sets.
             unfold equiv, complement in *;
             try contradiction; simpl; f_equal.
           rewrite remove_diff_cons. reflexivity.
+  Qed.
+
+  Lemma Subset_difference : forall l r,
+      Subset l r -> difference l r = [].
+  Proof.
+    intros l r Hlr. apply Subset_Diff in Hlr.
+    unfold Difference in Hlr.
+    induction l as [| h l IHl]; simpl; auto.
+    pose proof In_member_reflects h r as Hhr; inv Hhr; simpl; firstorder.
+  Qed.
+
+  Corollary difference_same : forall l : list A,
+      difference l l = [].
+  Proof.
+    intros l. apply Subset_difference.
+    intuition.
+  Qed.
+
+  Corollary uniques_app_same : forall l : list A,
+      uniques (l ++ l) = uniques l.
+  Proof.
+    intros l. rewrite uniques_app2.
+    rewrite remove_diff.
+    rewrite Subset_difference by auto using uniques_sound.
+    apply app_nil_r.
   Qed.
 
   Local Hint Resolve Union_Subset_l : core.

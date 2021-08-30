@@ -58,9 +58,10 @@ Section ComputeUnify.
   Proof.
     - intros C ? C' l r ? ? Heq; subst;
         autounfold with core; simpl.
-      rewrite app_assoc. rewrite remove_dups_app.
+      rewrite app_assoc.
+      rewrite uniques_app.
       apply typ_eq_eq in Heq; subst.
-      Search (remove_dups (?l ++ ?l)).
+      rewrite uniques_app_same.
       admit.
     - admit.
     - admit.

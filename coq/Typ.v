@@ -39,7 +39,7 @@ Fixpoint typ_size (t : typ) : nat :=
   end.
 
 Definition typ_size_vars (t : typ) : nat * nat :=
-  (length (remove_dups (tvars t)), typ_size t).
+  (length (uniques (tvars t)), typ_size t).
 
 Definition Ctvars : list (typ * typ) -> list nat :=
   fold_right (fun '(l,r) acc => tvars l ++ tvars r ++ acc) [].
@@ -48,7 +48,7 @@ Definition C_size : list (typ * typ) -> nat :=
   fold_right (fun '(l,r) acc => typ_size l + typ_size r + acc) 0.
 
 Definition C_size_vars (C : list (typ * typ)) : nat * nat :=
-  (length (remove_dups (Ctvars C)), C_size C).
+  (length (uniques (Ctvars C)), C_size C).
     
 Section TypEq.
   Lemma typ_eq_reflexive : forall t, typ_eq t t = true.
@@ -190,41 +190,4 @@ Section TSub.
     apply Hg in Hgy. f_equal.
     apply tsub_not_in_tvars; auto.
   Qed.
-  
-  Lemma tsub_single_size : forall τ t X,
-      ~ In X (tvars t) ->
-      let s := (X ↦ t;; ∅)%env in
-      typ_size (s † τ)%typ <= S (typ_size t + typ_size τ).
-  Proof.
-    intros τ t X HIn s; subst s.
-      generalize dependent X;
-      generalize dependent t.
-      induction τ as [| | t1 IHt1 t2 IHt2 | T];
-        intros t X HIn; simpl; try lia.
-    - admit.
-    - destruct (equiv_dec T X) as [HTX | HTX];
-        unfold equiv, complement in *; subst.
-      + rewrite bind_sound. lia.
-      + rewrite bind_complete by assumption.
-        simpl. lia.
-  Abort.
-
-  Lemma tsub_unique_vars : forall τ t X,
-      ~ In X (tvars t) ->
-      let s := (X ↦ t;; ∅)%env in
-      length (remove_dups (tvars (s † τ)%typ))
-      <= S (length (remove_dups (tvars τ ++ tvars t))).
-  Proof.
-    intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
-      intros t X HIn s; subst s; simpl; try lia.
-    - pose proof IHt1 t X HIn as IH1; clear IHt1.
-      pose proof IHt2 t X HIn as IH2; clear IHt2.
-      simpl in *. admit.
-    - destruct (equiv_dec T X) as [HXT | HXT];
-        unfold equiv, complement in *; subst; simpl in *.
-      + rewrite bind_sound.
-        rewrite app_length; lia.
-      + rewrite bind_complete by assumption.
-        simpl; lia.        
-  Abort.
 End TSub.
