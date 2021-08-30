@@ -12,15 +12,18 @@ Inductive typ : Set :=
 Declare Scope typ_scope.
 Delimit Scope typ_scope with typ.
 
+Coercion TVar : nat >-> typ.
 Notation "t1 → t2"
   := (TArrow t1 t2)
        (at level 30, right associativity) : typ_scope.
+
+Open Scope typ_scope.
 
 Fixpoint typ_eq (l r : typ) : bool :=
   match l, r with
   | TBool, TBool | TNat, TNat => true
   | TVar T1, TVar T2 => T1 =? T2
-  | (l → l')%typ, (r → r')%typ
+  | l → l', r → r'
     => typ_eq l r && typ_eq l' r'
   | _, _ => false
   end.
@@ -29,13 +32,13 @@ Fixpoint tvars (t : typ) : list nat :=
   match t with
   | TBool | TNat => []
   | TVar T => [T]
-  | (t → t')%typ => tvars t ++ tvars t'
+  | t → t' => tvars t ++ tvars t'
   end.
 
 Fixpoint typ_size (t : typ) : nat :=
   match t with
   | TBool | TNat | TVar _ => 1
-  | (t → t')%typ => 1 + typ_size t + typ_size t'
+  | t → t' => 1 + typ_size t + typ_size t'
   end.
 
 Definition typ_size_vars (t : typ) : nat * nat :=
@@ -87,16 +90,16 @@ Fixpoint tsub (σ : tenv) (t : typ) {struct t} : typ :=
   match t with
   | TBool => TBool
   | TNat => TNat
-  | (t → t')%typ => (σ † t → σ † t')%typ
+  | t → t' => σ † t → σ † t'
   | TVar T => match σ T with
              | Some τ => τ
-             | None => TVar T
+             | None => T
              end
   end
 where "σ † t" := (tsub σ t) : typ_scope.
 
 Definition Ctsub (s : tenv) : list (typ * typ) -> list (typ * typ) :=
-  map (fun '(l,r) => (s † l, s † r)%typ).
+  map (fun '(l,r) => (s † l, s † r)).
 
 Definition tsub_compose (s1 s2 : tenv) : tenv :=
   env_map (tsub s1) s2.
@@ -105,7 +108,7 @@ Notation "s1 ‡ s2"
   := (tsub_compose s1 s2)
        (at level 21, left associativity) : env_scope.
 
-Definition satisfy σ τ1 τ2 : Prop := (σ † τ1 = σ † τ2)%typ.
+Definition satisfy σ τ1 τ2 : Prop := σ † τ1 = σ † τ2.
 
 Section Satisfy.
   Lemma satisfy_reflexive : forall σ, Reflexive (satisfy σ).
@@ -130,7 +133,7 @@ Notation "s × g" := (env_map (tsub s) g)
                       (at level 25, right associativity) : env_scope.
 
 Section TSub.
-  Lemma tsub_empty : forall t, (∅%env † t)%typ = t.
+  Lemma tsub_empty : forall t, ∅%env † t = t.
   Proof.
     intro t; induction t; simpl in *; auto.
     rewrite IHt1. rewrite IHt2. reflexivity.
@@ -138,7 +141,7 @@ Section TSub.
 
   Lemma tsub_not_in_tvars : forall t t' T s,
       ~ In T (tvars t) ->
-      ((T ↦ t';; s)%env † t = s † t)%typ.
+      (T ↦ t';; s)%env † t = s † t.
   Proof.
     intro t;
       induction t as [| | t1 IHt1 t2 IHt2 | X];

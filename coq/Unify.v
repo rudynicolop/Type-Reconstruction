@@ -21,7 +21,7 @@ Inductive Unify : list (typ * typ) -> tenv -> Prop :=
     Unify ((τ , TVar T) :: C) (σ ‡ s)%env
 | Unify_cons_arrow t t' τ τ' C σ :
     Unify ((t,τ) :: (t',τ') :: C) σ ->
-    Unify ((t → τ, t' → τ')%typ :: C) σ.
+    Unify ((t → τ, t' → τ') :: C) σ.
 
 Section ComputeUnify.
 
@@ -50,7 +50,7 @@ Section ComputeUnify.
           else
             let s' := (R ↦ l;; ∅)%env in
             s ↤ unify (Ctsub s' C);; (s ‡ s')%env
-        | (l → l')%typ,(r → r')%typ =>
+        | l → l', r → r' =>
           unify ((l,r) :: (l',r') :: C)
         | _, _ => None
         end

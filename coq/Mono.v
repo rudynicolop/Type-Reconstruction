@@ -5,13 +5,25 @@ Require Export CoqRecon.Maybe
 Inductive op : Set :=
 | And | Or | Add | Sub | Eq | Lt.
 
+Declare Scope op_scope.
+Delimit Scope op_scope with op.
+
+Notation "∧" := And (at level 0) : op_scope.
+Notation "∨" := Or (at level 0) : op_scope.
+Notation "⨥" := Add (at level 0) : op_scope.
+Notation "⨪" := Sub (at level 0) : op_scope.
+Notation "≅" := Eq (at level 0) : op_scope.
+Notation "≦" := Lt (at level 0) : op_scope.
+
+Open Scope op_scope.
+
 Inductive op_typs : op -> typ -> typ -> Prop :=
-| ot_and : op_typs And TBool TBool
-| ot_or  : op_typs Or  TBool TBool
-| ot_add : op_typs Add TNat  TNat
-| ot_sub : op_typs Sub TNat  TNat
-| ot_eq  : op_typs Eq  TNat  TBool
-| ot_lt  : op_typs Lt  TNat  TBool.
+| ot_and : op_typs ∧ TBool TBool
+| ot_or  : op_typs ∨ TBool TBool
+| ot_add : op_typs ⨥ TNat  TNat
+| ot_sub : op_typs ⨪ TNat  TNat
+| ot_eq  : op_typs ≅ TNat  TBool
+| ot_lt  : op_typs ≦ TNat  TBool.
 
 Inductive term : Set :=
 | Var : string -> term
@@ -25,30 +37,39 @@ Inductive term : Set :=
 Declare Scope term_scope.
 Delimit Scope term_scope with term.
 
+Coercion Var : string >-> term.
+Coercion Bool : bool >-> term.
+Coercion Nat : nat >-> term.
+
 Notation "'λ' x ⇒ e"
   := (Abs x e)
        (at level 35, right associativity) : term_scope.
 Notation "e1 ⋅ e2"
   := (App e1 e2)
-       (at level 34, left associativity) : term_scope.
+       (at level 29, left associativity) : term_scope.
+(*Notation "[ e1 opp e2 ]"
+  := (Op opp e1 e2)
+  (at level 31, left associativity) : term_scope.*)
+
+Open Scope term_scope.
 
 Reserved Notation "g ⊨ e ∴ t" (at level 70).
 
 Inductive typing (Γ : gamma) : term -> typ -> Prop :=
-| t_bool b :
-    Γ ⊨ Bool b ∴ TBool
-| t_nat n :
-    Γ ⊨ Nat n ∴ TNat
+| t_bool (b : bool) :
+    Γ ⊨ b ∴ TBool
+| t_nat (n : nat) :
+    Γ ⊨ n ∴ TNat
 | t_var x τ :
     bound x τ Γ ->
-    Γ ⊨ Var x ∴ τ
+    Γ ⊨ x ∴ τ
 | t_abs x e τ τ' :
     (x ↦ τ;; Γ)%env ⊨ e ∴ τ' ->
-    Γ ⊨ (λ x ⇒ e)%term ∴ (τ → τ')%typ
+    Γ ⊨ (λ x ⇒ e) ∴ (τ → τ')
 | t_app e1 e2 τ τ' :
-    Γ ⊨ e1 ∴ (τ → τ')%typ ->
+    Γ ⊨ e1 ∴ (τ → τ') ->
     Γ ⊨ e2 ∴ τ ->
-    Γ ⊨ (e1 ⋅ e2)%term ∴ τ'
+    Γ ⊨ (e1 ⋅ e2) ∴ τ'
 | t_cond e1 e2 e3 τ :
     Γ ⊨ e1 ∴ TBool ->
     Γ ⊨ e2 ∴ τ ->
@@ -66,7 +87,7 @@ Section Prez.
 
   Lemma pres_op_typs : forall o τ τ',
       op_typs o τ τ' ->
-      forall σ, op_typs o (σ † τ)%typ (σ † τ')%typ.
+      forall σ, op_typs o (σ † τ) (σ † τ').
   Proof.
     intros o t t' H s; inv H; simpl; auto.
   Qed.
@@ -76,7 +97,7 @@ Section Prez.
   
   Theorem preservation : forall Γ e τ,
       Γ ⊨ e ∴ τ -> forall σ,
-        (σ × Γ)%env ⊨ e ∴ (σ † τ)%typ.
+        (σ × Γ)%env ⊨ e ∴ (σ † τ).
   Proof.
     intros g e t H;
       induction H; intros s; simpl in *; eauto.
@@ -93,13 +114,13 @@ Open Scope set_scope.
 
 Inductive constraint_typing (Γ : gamma)
   : term -> typ -> list nat -> list (typ * typ) -> Prop :=
-| ct_bool b :
-    Γ ⊢ Bool b ∴ TBool ⊣ [] ≀ []
-| ct_nat n :
-    Γ ⊢ Nat n ∴ TNat ⊣ [] ≀ []
+| ct_bool (b : bool) :
+    Γ ⊢ b ∴ TBool ⊣ [] ≀ []
+| ct_nat (n : nat) :
+    Γ ⊢ n ∴ TNat ⊣ [] ≀ []
 | ct_var x τ :
     bound x τ Γ ->
-    Γ ⊢ Var x ∴ τ ⊣ [] ≀ []
+    Γ ⊢ x ∴ τ ⊣ [] ≀ []
 | ct_abs x e T τ X C :
     T ∉ X ->
     (x ↦ TVar T ;; Γ)%env ⊢ e ∴ τ ⊣ X ≀ C ->
@@ -145,7 +166,7 @@ Section Sound.
       Γ ⊢ e ∴ t ⊣ X ≀ C ->
       forall σ,
         Forall (uncurry (satisfy σ)) C ->
-        (σ × Γ)%env ⊨ e ∴ (σ † t)%typ.
+        (σ × Γ)%env ⊨ e ∴ (σ † t).
   Proof.
     intros g e t X C H; induction H; intros s HC; eauto.
     - apply IHconstraint_typing in HC.
