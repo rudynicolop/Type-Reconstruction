@@ -26,6 +26,8 @@ Inductive Unify : list (typ * typ) -> tenv -> Prop :=
 Section ComputeUnify.
 
   Local Hint Unfold C_size_vars : core.
+
+  Open Scope set_scope.
   
   Function unify
            (C : list (typ * typ))
@@ -72,7 +74,14 @@ Section ComputeUnify.
         pose proof typ_size_non_zero r. lia.
       + left. lia.
     - intros ? ? C' ? ? ? R ? ? ? _ _;
-        subst; autounfold with core; simpl. admit.
+        subst; autounfold with core; simpl.
+      pose proof In_member_reflects R (Ctvars C') as HRC'; inv HRC'.
+      + admit.
+      + rewrite Ctsub_not_in_tvars by assumption.
+        rewrite Ctsub_empty.
+        rewrite remove_uniques_comm.
+        rewrite remove_not_in by assumption.
+        left. lia.
     - admit.
     - admit.
     - admit.

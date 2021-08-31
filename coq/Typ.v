@@ -193,4 +193,45 @@ Section TSub.
     apply Hg in Hgy. f_equal.
     apply tsub_not_in_tvars; auto.
   Qed.
+
+  Open Scope set_scope.
+  
+  Lemma tsub_length_count_tvars : forall τ t T,
+      T ∉ tvars t ->
+      length (tvars ((T ↦ t;; ∅)%env † τ)) =
+      count T (tvars τ) * length (tvars t) +
+      length (tvars τ) - count T (tvars τ).
+  Proof.
+    intro t; induction t as [| | t1 IHt1 t2 IHt2 | X];
+      intros t T HTt; simpl in *; auto.
+    - apply IHt1 in HTt as IH1; clear IHt1;
+        apply IHt2 in HTt as IH2; clear IHt2.
+      repeat rewrite app_length. rewrite IH1, IH2.
+      repeat rewrite count_app.
+      pose proof count_length_le (tvars t1) T as HCL1.
+      pose proof count_length_le (tvars t2) T as HCL2. lia.
+    - unfold bind. dispatch_eqdec; try lia.
+  Qed.
+
+  Lemma tsub_length_uniques_tvars : forall τ t T,
+      T ∉ tvars t -> T ∈ tvars τ ->
+      length (uniques (tvars ((T ↦ t;; ∅)%env † τ))) =
+      length (uniques (tvars τ ∪ tvars t)) - 1.
+  Proof.
+    intro t; induction t as [| | t1 IHt1 t2 IHt2| x];
+      intros t T HTt HTτ; simpl in *; try contradiction.
+    - rewrite in_app_iff in HTτ.
+      pose proof In_member_reflects T (tvars t1) as HTt1.
+      pose proof In_member_reflects T (tvars t2) as HTt2.
+      inv HTt1; inv HTt2; destruct HTτ as [HTt1 | HTt2];
+        try contradiction.
+      + pose proof IHt1 _ _ HTt HTt1 as IH1; clear IHt1.
+        pose proof IHt2 _ _ HTt H2   as IH2; clear IHt2.
+        repeat rewrite uniques_app_diff in *.
+        repeat rewrite app_length in *.
+        Search (length (_ ∖ _)).
+        rewrite IH1.
+        Check difference_app_r_assoc.
+        rewrite <- difference_app_r_assoc.
+  Abort.
 End TSub.

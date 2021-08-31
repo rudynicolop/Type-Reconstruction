@@ -248,6 +248,15 @@ Section Uniques.
         try dispatch_eqdec; try firstorder lia.
   Qed.
 
+  Corollary count_uniques_in : forall a l,
+      In a l -> count a (uniques l) = 1.
+  Proof.
+    intros a l Hal.
+    rewrite <- uniques_iff in Hal.
+    rewrite count_in in Hal.
+    pose proof count_uniques l a. lia.
+  Qed.
+  
   Lemma count_not_in : forall l a,
       ~ In a l <-> count a l = 0.
   Proof.
@@ -321,4 +330,21 @@ Section Uniques.
       auto using Permutation_cons_app.
     - exists 0. exists t. simpl; intuition.
   Qed.
+
+  (* length l =
+     ∑ i ∈ l (count i l) *)
+  Lemma length_count_sum : forall l,
+      fold_right (fun a acc => count a l + acc) 0 (uniques l) =
+      length l.
+  Proof.
+    intros l; induction l as [| h l IHl]; simpl; auto.
+    dispatch_eqdec. f_equal.
+    rewrite remove_uniques_comm.
+  Abort.
+  
+  Lemma length_uniques_count : forall l,
+      length (uniques l) *
+      (fold_right (fun a acc => count a l + acc) 0 l)
+      = length l.
+  Abort.
 End Uniques.
