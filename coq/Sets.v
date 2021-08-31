@@ -534,6 +534,57 @@ Section Sets.
       pose proof In_member_reflects h s as Hhs;
       inv Hhr; inv Hhs; simpl; f_equal; auto.
   Abort.
+
+  Lemma uniques_perm_app : forall l l' s,
+      Permutation l (l' ++ s) ->
+      forall r r',
+        Permutation r (r' ++ s) ->
+        Permutation (uniques (l ++ r)) (uniques (l' ++ r' ++ s)).
+  Proof.
+    intros l l' s Hll' r r' Hrr'.
+    assert (Happ : Permutation (l ++ r) ((l' ++ s) ++ (r' ++ s)))
+      by auto using Permutation_app.
+    rewrite <- app_assoc in Happ.
+    assert (Happ': Permutation (l ++ r) (l' ++ r' ++ s ++ s)).
+    { apply perm_trans with (l' ++ s ++ r' ++ s); auto.
+      apply Permutation_app_head.
+      apply Permutation_app_swap_app. }
+    apply uniques_perm in Happ'.
+    rewrite (uniques_app l') in Happ'.
+    rewrite (uniques_app r') in Happ'.
+    rewrite uniques_app_same in Happ'.
+    rewrite <- (uniques_app r') in Happ'.
+    rewrite <- (uniques_app l') in Happ'.
+    assumption.
+  Qed.
+
+  Lemma uniques_uniques_perm_app : forall l l' s,
+      Permutation (uniques l) (uniques (l' ++ s)) ->
+      forall r r',
+        Permutation (uniques r) (uniques (r' ++ s)) ->
+        Permutation (uniques (l ++ r)) (uniques (l' ++ r' ++ s)).
+  Proof.
+    intros l l' s Hll' r r' Hrr'.
+    assert (Happ : Permutation
+                     (uniques l ++ uniques r)
+                     (uniques (l' ++ s) ++ uniques (r' ++ s)))
+      by auto using Permutation_app.
+    apply uniques_perm in Happ.
+    repeat rewrite <- uniques_app in Happ.
+    rewrite <- app_assoc in Happ.
+    assert (Happ' : Permutation
+                      (uniques (l ++ r))
+                      (uniques (l' ++ r' ++ s ++ s))).
+    { apply perm_trans with (uniques (l' ++ s ++ r' ++ s)); auto.
+      apply uniques_perm. apply Permutation_app_head.
+      apply Permutation_app_swap_app. }
+    rewrite (uniques_app l') in Happ'.
+    rewrite (uniques_app r') in Happ'.
+    rewrite uniques_app_same in Happ'.
+    rewrite <- (uniques_app r') in Happ'.
+    rewrite <- (uniques_app l') in Happ'.
+    assumption.
+  Qed.
 End Sets.
 
 Section NatSet.

@@ -1,7 +1,5 @@
-Require Export Coq.Strings.String
-        CoqRecon.Env
-        Coq.micromega.Lia
-        Coq.Arith.PeanoNat.
+Require Export Coq.Strings.String CoqRecon.Env
+        Coq.micromega.Lia Coq.Arith.PeanoNat.
 
 Inductive typ : Set :=
 | TBool
@@ -213,25 +211,66 @@ Section TSub.
     - unfold bind. dispatch_eqdec; try lia.
   Qed.
 
+  Local Hint Resolve Permutation_refl : core.
+  
+  Lemma tsub_uniques_tvars_perm : forall τ t T,
+      T ∉ tvars t -> T ∈ tvars τ ->
+      Permutation
+        (uniques (tvars ((T ↦ t;; ∅)%env † τ)))
+        (uniques (remove T (tvars τ) ∪ tvars t)).
+  Proof.
+    intro t; induction t as [| | t1 IHt1 t2 IHt2 | x];
+      intros t T HTt HIn; simpl in *;
+        try contradiction.
+    - rewrite in_app_iff in HIn.
+      pose proof In_member_reflects T (tvars t1) as HTt1.
+      pose proof In_member_reflects T (tvars t2) as HTt2.
+      inv HTt1; inv HTt2; rewrite remove_app.
+      + pose proof IHt1 _ _ HTt H0 as IH1; clear IHt1.
+        pose proof IHt2 _ _ HTt H2 as IH2; clear IHt2.
+        rewrite <- app_assoc.
+        apply uniques_uniques_perm_app; auto.
+      + rewrite (remove_not_in (tvars t2)) by assumption.
+        rewrite (tsub_not_in_tvars t2) by assumption.
+        rewrite tsub_empty by assumption.
+        apply perm_trans with
+            (uniques (remove T (tvars t1) ∪ tvars t ∪ tvars t2)).
+        * repeat rewrite (uniques_app _ (tvars t2)).
+          apply uniques_perm. auto using Permutation_app.
+        * apply uniques_perm. repeat rewrite <- app_assoc.
+          apply Permutation_app_head. apply Permutation_app_swap.
+      + rewrite (remove_not_in (tvars t1)) by assumption.
+        rewrite (tsub_not_in_tvars t1) by assumption.
+        rewrite tsub_empty by assumption.
+        rewrite <- app_assoc.
+        repeat rewrite (uniques_app (tvars t1)).
+        apply uniques_perm. apply Permutation_app_head; auto.
+      + intuition.
+    - destruct HIn; subst; try contradiction.
+      unfold bind. dispatch_eqdec; auto.
+  Qed.
+
   Lemma tsub_length_uniques_tvars : forall τ t T,
       T ∉ tvars t -> T ∈ tvars τ ->
       length (uniques (tvars ((T ↦ t;; ∅)%env † τ))) =
       length (uniques (tvars τ ∪ tvars t)) - 1.
   Proof.
-    intro t; induction t as [| | t1 IHt1 t2 IHt2| x];
-      intros t T HTt HTτ; simpl in *; try contradiction.
-    - rewrite in_app_iff in HTτ.
-      pose proof In_member_reflects T (tvars t1) as HTt1.
-      pose proof In_member_reflects T (tvars t2) as HTt2.
-      inv HTt1; inv HTt2; destruct HTτ as [HTt1 | HTt2];
-        try contradiction.
-      + pose proof IHt1 _ _ HTt HTt1 as IH1; clear IHt1.
-        pose proof IHt2 _ _ HTt H2   as IH2; clear IHt2.
-        repeat rewrite uniques_app_diff in *.
-        repeat rewrite app_length in *.
-        Search (length (_ ∖ _)).
-        rewrite IH1.
-        Check difference_app_r_assoc.
-        rewrite <- difference_app_r_assoc.
-  Abort.
+    intros τ t T HTt HTτ.
+    pose proof tsub_uniques_tvars_perm _ _ _ HTt HTτ as H.
+    apply Permutation_length in H.
+    rewrite uniques_app in H.
+    rewrite <- remove_uniques_comm in H.
+    assert (HInu : T ∉ (uniques (tvars t))).
+    { intros HTut.
+      apply uniques_sound in HTut. contradiction. }
+    pose proof remove_not_in _ _ HInu as Hru.
+    rewrite <- Hru in H. rewrite <- remove_app in H.
+    rewrite <- remove_uniques_comm in H.
+    repeat rewrite <- uniques_app in H.
+    rewrite count_remove_length in H.
+    assert (T ∈ (tvars τ ∪ tvars t))
+      by (rewrite in_app_iff; auto).
+    rewrite count_uniques_in in H by assumption.
+    assumption.
+  Qed.
 End TSub.
