@@ -3,10 +3,12 @@
 Base.v
 Env.v
 EqDecInst.v
+ListLib.v
 Maybe.v
 Mono.v
 MonoComputable.v
 MonoCompleteness.v
+Pair.v
 Sets.v
 Typ.v
 Unify.v

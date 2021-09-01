@@ -18,18 +18,14 @@ Section Env.
       (bind k v e) k = Some v.
   Proof.
     intros k v e; unfold bind.
-    destruct (equiv_dec k k) as [Hk | Hk];
-      unfold equiv in *; try contradiction.
-    reflexivity.
+    dispatch_eqdec; reflexivity.
   Qed.
 
   Lemma bind_complete : forall k' k v e,
       k' <> k -> (bind k v e) k' = e k'.
   Proof.
     intros k' k v e Hk'k; unfold bind.
-    destruct (equiv_dec k' k) as [Hk | Hk];
-      unfold equiv in *; try contradiction.
-    reflexivity.
+    dispatch_eqdec; reflexivity.
   Qed.
 
   Definition find (k : K) (e : env) : option V := e k.
@@ -98,8 +94,7 @@ Section EnvMap.
   Proof.
     intros a b e; extensionality k.
     unfold bind, env_map.
-    destruct (equiv_dec k a) as [Hka | Hka];
-      unfold equiv in *; subst; reflexivity.
+    dispatch_eqdec; reflexivity.
   Qed.
 
   Open Scope maybe_scope.
@@ -129,9 +124,9 @@ Notation "'∅'" := empty (at level 0, no associativity) : env_scope.
 Notation "k ↦ v ';;' e"
   := (bind k v e)
        (at level 11, right associativity) : env_scope.
-Notation "e ∉ ks"
+(*Notation "e ∉ ks"
   := (mask e ks)
-       (at level 15, left associativity) : env_scope.
+  (at level 15, left associativity) : env_scope. *)
 Notation "eb ≺ ea"
   := (env_compose eb ea)
        (at level 14, left associativity) : env_scope.
