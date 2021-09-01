@@ -30,4 +30,4 @@ Completeness results have proved much more elusive than their soundness counterp
 - Completeness of constraint generation with respect to declarative typing (`MonoCompleteness.v`).
 - Completeness of computable constraint generation
 with respect to the ***`Inductive`*** definition (`MonoComputable.v`).
-- Adding `let` expressions to the language, albeit with/o ***`let`-polymorphism***.
+- Adding `let` expressions to the language, albeit w/o ***`let`-polymorphism***.
