@@ -22,6 +22,7 @@ reference to a declarative typing semantics, and should be "equivalent".
 - Soundness of constraint generation with respect to declarative typing (`Mono.v`).
 - Soundness of computable constraint generation
 with respect to the ***`Inductive`*** definition (`MonoComputable.v`).
+- Termitation of the unification algorithm (`Unify.v`).
 
 ### In Progress
 
@@ -29,5 +30,4 @@ Completeness results have proved much more elusive than their soundness counterp
 - Completeness of constraint generation with respect to declarative typing (`MonoCompleteness.v`).
 - Completeness of computable constraint generation
 with respect to the ***`Inductive`*** definition (`MonoComputable.v`).
-- Termitation of the unification algorithm (`Unify.v`).
 - Adding `let` expressions to the language, albeit with/o ***`let`-polymorphism***.
