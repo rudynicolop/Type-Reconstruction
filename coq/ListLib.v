@@ -331,20 +331,11 @@ Section Uniques.
     - exists 0. exists t. simpl; intuition.
   Qed.
 
-  (* length l =
-     ∑ i ∈ l (count i l) *)
-  Lemma length_count_sum : forall l,
-      fold_right (fun a acc => count a l + acc) 0 (uniques l) =
-      length l.
+  Lemma length_uniques_app_le : forall l r,
+      length (uniques l) <= length (uniques (l ++ r)).
   Proof.
-    intros l; induction l as [| h l IHl]; simpl; auto.
-    dispatch_eqdec. f_equal.
-    rewrite remove_uniques_comm.
-  Abort.
-  
-  Lemma length_uniques_count : forall l,
-      length (uniques l) *
-      (fold_right (fun a acc => count a l + acc) 0 l)
-      = length l.
-  Abort.
+    intros l r.
+    rewrite uniques_app2.
+    rewrite app_length. lia.
+  Qed.
 End Uniques.

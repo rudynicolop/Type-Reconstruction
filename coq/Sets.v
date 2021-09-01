@@ -585,6 +585,20 @@ Section Sets.
     rewrite <- (uniques_app l') in Happ'.
     assumption.
   Qed.
+
+  Lemma uniques_uniques_perm_app3 : forall l l' m m' n n' o,
+      Permutation (uniques l) (uniques (l' ++ o)) ->
+      Permutation (uniques m) (uniques (m' ++ o)) ->
+      Permutation (uniques n) (uniques (n' ++ o)) ->
+      Permutation (uniques (l ++ m ++ n)) (uniques (l' ++ m' ++ n' ++ o)).
+  Proof.
+    intros l l' m m' n n' o Hl Hm Hn.
+    pose proof uniques_uniques_perm_app _ _ _ Hm _ _ Hn  as Hmn.
+    rewrite app_assoc in Hmn.
+    pose proof uniques_uniques_perm_app _ _ _ Hl _ _ Hmn as Hml.
+    repeat rewrite <- app_assoc in Hml.
+    assumption.
+  Qed.
 End Sets.
 
 Section NatSet.

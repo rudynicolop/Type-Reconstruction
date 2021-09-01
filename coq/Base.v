@@ -53,3 +53,21 @@ End Curry.
 Definition reflects
            {A B : Type} (R : A -> B -> Prop) (f: A -> B -> bool) :=
   forall a b, reflect (R a b) (f a b).
+
+Lemma Acc_inj : forall {A B : Type} (f : A -> B) (R : B -> B -> Prop) (a : A),
+    Acc R (f a) -> Acc (fun a a' => R (f a) (f a')) a.
+Proof.
+  intros A B f R a HR.
+  remember (f a) as fa eqn:Heqfa.
+  generalize dependent a.
+  induction HR; intros a ?; subst.
+  constructor. firstorder.
+Qed.
+
+Lemma well_founded_inj : forall {A B : Type} (f : A -> B) (R : B -> B -> Prop),
+    well_founded R ->
+    well_founded (fun a a' => R (f a) (f a')).
+Proof.
+  unfold well_founded. intros A B f R.
+  intros HR a. eauto using Acc_inj.
+Qed.  

@@ -70,6 +70,32 @@ Section TypEq.
         try discriminate; try reflexivity;
           autorewrite with core in *; f_equal; intuition.
   Qed.
+
+  Local Hint Resolve typ_eq_reflexive : core.
+  Local Hint Resolve typ_eq_eq : core.
+  
+  Lemma typ_eq_iff : forall l r,
+      typ_eq l r = true <-> l = r.
+  Proof.
+    split; intros; subst; auto.
+  Qed.
+
+  Lemma typ_eq_reflects : reflects eq typ_eq.
+  Proof.
+    unfold reflects.
+    intros l r; destruct (typ_eq l r) eqn:Hlr;
+      constructor; intuition; subst.
+    rewrite typ_eq_reflexive in Hlr.
+    discriminate.
+  Qed.
+
+  Lemma typ_eq_not_eq : forall l r,
+      typ_eq l r = false <-> l <> r.
+  Proof.
+    intros l r.
+    pose proof typ_eq_reflects l r as Hlr; inv Hlr;
+      intuition.
+  Qed.
 End TypEq.
 
 Section TypSize.
@@ -250,6 +276,134 @@ Section TSub.
       unfold bind. dispatch_eqdec; auto.
   Qed.
 
+  Lemma Ctsub_perm_uniques_Ctvars : forall C t T,
+      T ∉ tvars t -> T ∈ Ctvars C ->
+      Permutation
+        (uniques (Ctvars (Ctsub (T ↦ t ;; ∅)%env C)))
+        (uniques (remove T (Ctvars C) ∪ tvars t)).
+  Proof.
+    intro C; induction C as [| [l r] C];
+      intros t T HTt HTC; simpl in *; try contradiction.
+    repeat rewrite in_app_iff in HTC.
+    pose proof In_member_reflects T (tvars l) as HTl.
+    pose proof In_member_reflects T (tvars r) as HTr.
+    pose proof In_member_reflects T (Ctvars C) as HTC'.
+    repeat rewrite remove_app.
+    inv HTl; inv HTr; inv HTC';
+      try (destruct HTC as [? | [? | ?]]; contradiction).
+    - pose proof IHC _ _ HTt H4 as IH; clear IHC.
+      pose proof tsub_uniques_tvars_perm _ _ _ HTt H0 as Hl.
+      pose proof tsub_uniques_tvars_perm _ _ _ HTt H2 as Hr.
+      pose proof uniques_uniques_perm_app3
+           _ _ _ _ _ _ _ Hl Hr IH as Happ.
+      repeat rewrite <- app_assoc in *. assumption.
+    - pose proof tsub_uniques_tvars_perm _ _ _ HTt H0 as Hl.
+      pose proof tsub_uniques_tvars_perm _ _ _ HTt H2 as Hr.
+      rewrite (remove_not_in (Ctvars C)) by assumption.
+      rewrite Ctsub_not_in_tvars by assumption.
+      rewrite Ctsub_empty by assumption.
+      pose proof uniques_uniques_perm_app _ _ _ Hl _ _ Hr as Happ.
+      apply perm_trans with
+          (uniques
+             ((remove T (tvars l)
+                      ++ remove T (tvars r)
+                      ++ tvars t)
+                ++ Ctvars C)).
+      + repeat rewrite app_assoc in *.
+        repeat rewrite (uniques_app _ (Ctvars C)).
+        apply uniques_perm.
+        apply Permutation_app_tail. assumption.
+      + apply uniques_perm.
+        repeat rewrite <- app_assoc.
+        repeat apply Permutation_app_head.
+        apply Permutation_app_swap.
+    - pose proof IHC _ _ HTt H4 as IH; clear IHC.
+      pose proof tsub_uniques_tvars_perm _ _ _ HTt H0 as Hl.
+      rewrite (remove_not_in (tvars r)) by assumption.
+      rewrite (tsub_not_in_tvars r) by assumption.
+      rewrite tsub_empty.
+      apply perm_trans with
+          (uniques
+             ((remove T (tvars l)
+                      ++ remove T (Ctvars C)
+                      ++ tvars t)
+                ++ tvars r)).
+      + apply perm_trans with
+            (uniques
+               ((tvars ((T ↦ t;; ∅)%env † l)
+                       ++ Ctvars (Ctsub (T ↦ t;; ∅)%env C))
+                  ++ tvars r)).
+        * apply uniques_perm.
+          repeat rewrite <- app_assoc.
+          apply Permutation_app_head.
+          apply Permutation_app_swap.
+        * do 2 rewrite (uniques_app _ (tvars r)).
+          apply uniques_perm.
+          apply Permutation_app_tail.
+          apply uniques_uniques_perm_app; assumption.
+      + apply uniques_perm.
+        repeat rewrite <- app_assoc.
+        apply Permutation_app_head.
+        rewrite (app_assoc (remove T (Ctvars C))).
+        apply Permutation_app_swap.
+    - pose proof tsub_uniques_tvars_perm _ _ _ HTt H0 as Hl.
+      rewrite (remove_not_in (tvars r)) by assumption.
+      rewrite (remove_not_in (Ctvars C)) by assumption.
+      rewrite (tsub_not_in_tvars r) by assumption.
+      rewrite (Ctsub_not_in_tvars C) by assumption.
+      rewrite tsub_empty. rewrite Ctsub_empty.
+      apply perm_trans with
+          (uniques ((remove T (tvars l) ++ tvars t)
+                      ++ tvars r ++ Ctvars C)).
+      + rewrite (uniques_app (tvars ((T ↦ t;; ∅)%env † l))).
+        rewrite (uniques_app (remove T (tvars l) ++ tvars t)).
+        apply uniques_perm.
+        apply Permutation_app_tail. assumption.
+      + apply uniques_perm.
+        repeat rewrite <- app_assoc.
+        apply Permutation_app_head.
+        apply Permutation_app_rot.
+    - pose proof IHC _ _ HTt H4 as IH; clear IHC.
+      pose proof tsub_uniques_tvars_perm _ _ _ HTt H2 as Hr.
+      rewrite (remove_not_in (tvars l)) by assumption.
+      rewrite (tsub_not_in_tvars l) by assumption.
+      rewrite tsub_empty.
+      repeat rewrite <- app_assoc.
+      repeat rewrite (uniques_app (tvars l)).
+      apply uniques_perm.
+      apply Permutation_app_head.
+      apply uniques_uniques_perm_app; assumption.
+    - rewrite (remove_not_in (tvars l)) by assumption.
+      rewrite (remove_not_in (Ctvars C)) by assumption.
+      rewrite (tsub_not_in_tvars l) by assumption.
+      rewrite (Ctsub_not_in_tvars) by assumption.
+      rewrite tsub_empty. rewrite Ctsub_empty.
+      repeat rewrite <- app_assoc.
+      do 2 rewrite (uniques_app (tvars l)).
+      apply uniques_perm.
+      apply Permutation_app_head.
+      apply perm_trans with
+          (uniques ((remove T (tvars r) ++ tvars t) ++ Ctvars C)).
+      + do 2 rewrite (uniques_app _ (Ctvars C)).
+        apply uniques_perm. apply Permutation_app_tail.
+        apply tsub_uniques_tvars_perm; assumption.
+      + apply uniques_perm.
+        repeat rewrite <- app_assoc.
+        apply Permutation_app_head.
+        apply Permutation_app_swap.
+    - pose proof IHC _ _ HTt H4 as IH; clear IHC.
+      rewrite (remove_not_in (tvars l)) by assumption.
+      rewrite (remove_not_in (tvars r)) by assumption.
+      repeat rewrite tsub_not_in_tvars by assumption.
+      repeat rewrite tsub_empty.
+      repeat rewrite <- app_assoc.
+      do 2 rewrite (uniques_app (tvars l)).
+      apply uniques_perm. apply Permutation_app_head.
+      do 2 rewrite (uniques_app (tvars r)).
+      apply uniques_perm. apply Permutation_app_head.
+      assumption.
+  Qed.
+  
   Lemma tsub_length_uniques_tvars : forall τ t T,
       T ∉ tvars t -> T ∈ tvars τ ->
       length (uniques (tvars ((T ↦ t;; ∅)%env † τ))) =
@@ -272,5 +426,21 @@ Section TSub.
       by (rewrite in_app_iff; auto).
     rewrite count_uniques_in in H by assumption.
     assumption.
+  Qed.
+
+  Lemma Ctsub_length_uniques_Ctvars : forall C t T,
+      T ∉ tvars t -> T ∈ Ctvars C ->
+      length (uniques (Ctvars (Ctsub (T ↦ t ;; ∅)%env C))) =
+      length (uniques (Ctvars C ∪ tvars t)) - 1.
+  Proof.
+    intros C t T HTt HTC.
+    pose proof Ctsub_perm_uniques_Ctvars _ _ _ HTt HTC as HP.
+    apply Permutation_length in HP. rewrite HP.
+    rewrite <- (remove_not_in (tvars t) T) at 1 by assumption.
+    rewrite <- remove_app. rewrite <- remove_uniques_comm.
+    rewrite count_remove_length.
+    assert (HTCt : T ∈ Ctvars C ∪ tvars t).
+    { rewrite in_app_iff. intuition. }
+    rewrite count_uniques_in by assumption. reflexivity.
   Qed.
 End TSub.
