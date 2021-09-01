@@ -1,4 +1,4 @@
-Require Export CoqRecon.Mono Coq.Arith.Compare_dec.
+Require Export CoqRecon.Mono.Mono Coq.Arith.Compare_dec.
 
 Open Scope maybe_scope.
 
