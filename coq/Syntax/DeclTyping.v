@@ -1,4 +1,4 @@
-Require Export CoqRecon.Term CoqRecon.EqDecInst.
+Require Export CoqRecon.Syntax.Term CoqRecon.Util.EqDecInst.
 
 Open Scope op_scope.
 

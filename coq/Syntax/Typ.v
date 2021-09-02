@@ -1,4 +1,4 @@
-Require Export Coq.Strings.String CoqRecon.Env
+Require Export Coq.Strings.String CoqRecon.Util.Env
         Coq.micromega.Lia Coq.Arith.PeanoNat.
 
 Inductive typ : Set :=
@@ -96,6 +96,16 @@ Section TypEq.
     pose proof typ_eq_reflects l r as Hlr; inv Hlr;
       intuition.
   Qed.
+
+  Lemma typ_eq_sym : forall l r,
+      typ_eq l r = typ_eq r l.
+  Proof.
+    intros l r.
+    pose proof typ_eq_reflects l r as Hlr; inv Hlr; auto.
+    apply not_eq_sym in H0.
+    rewrite <- typ_eq_not_eq in H0.
+    rewrite H0. reflexivity.
+  Qed.
 End TypEq.
 
 Section TypSize.
@@ -125,12 +135,18 @@ where "σ † t" := (tsub σ t) : typ_scope.
 Definition Ctsub (s : tenv) : list (typ * typ) -> list (typ * typ) :=
   map (fun '(l,r) => (s † l, s † r)).
 
-Definition tsub_compose (s1 s2 : tenv) : tenv :=
-  env_map (tsub s1) s2.
+Definition tenv_compose (s1 s2 : tenv) : tenv :=
+  fun T =>
+    match s2 T with
+    | Some t => Some (s1 † t)
+    | None   => s1 T
+    end.
 
 Notation "s1 ‡ s2"
-  := (tsub_compose s1 s2)
+  := (tenv_compose s1 s2)
        (at level 21, left associativity) : env_scope.
+
+Open Scope env_scope.
 
 Definition satisfy σ τ1 τ2 : Prop := σ † τ1 = σ † τ2.
 
@@ -157,15 +173,17 @@ Notation "s × g" := (env_map (tsub s) g)
                       (at level 25, right associativity) : env_scope.
 
 Section TSub.
-  Lemma tsub_empty : forall t, ∅%env † t = t.
+  Lemma tsub_empty : forall t, ∅ † t = t.
   Proof.
     intro t; induction t; simpl in *; auto.
     rewrite IHt1. rewrite IHt2. reflexivity.
   Qed.
 
+  Open Scope set_scope.
+  
   Lemma tsub_not_in_tvars : forall t t' T s,
-      ~ In T (tvars t) ->
-      (T ↦ t';; s)%env † t = s † t.
+      T ∉ tvars t ->
+      (T ↦ t';; s) † t = s † t.
   Proof.
     intro t;
       induction t as [| | t1 IHt1 t2 IHt2 | X];
@@ -177,16 +195,67 @@ Section TSub.
       rewrite bind_complete by intuition. reflexivity.
   Qed.
 
+  Lemma tenv_compose_empty_l : forall s, s ‡ ∅ = s.
+  Proof.
+    intros s. extensionality T.
+    unfold "‡"; reflexivity.
+  Qed.
+
+  Lemma tenv_compose_empty_r : forall s, ∅ ‡ s = s.
+  Proof.
+    intros s. extensionality T. unfold "‡".
+    destruct (s T); try rewrite tsub_empty; reflexivity.
+  Qed.
+
+  Lemma tsub_assoc : forall t s1 s2,
+      s1 † s2 † t = (s1 ‡ s2) † t.
+  Proof.
+    intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
+      intros s1 s2; simpl; try reflexivity;
+        try (f_equal; auto).
+    unfold "‡". destruct (s2 T); simpl; reflexivity.
+  Qed.
+  
+  Lemma tenv_compose_assoc : forall σ γ ϵ,
+      σ ‡ (γ ‡ ϵ) = σ ‡ γ ‡ ϵ.
+  Proof.
+    intros s g e. extensionality T.
+    unfold "‡".
+    repeat match goal with
+           | |- context [match ?a with
+                        | Some _ => _
+                        | None => _
+                        end]
+             => destruct a as [? |] eqn:?; simpl
+           | H: Some _ = Some _ |- _ => inv H
+           end; auto; try discriminate.
+    f_equal. rewrite tsub_assoc. reflexivity.
+  Qed.
+  
+  Lemma tenv_compose_tsub_not_in_tvars : forall t t' s1 s2 T,
+      T ∉ tvars t ->
+      (s1 ‡ T ↦ t';; s2) † t = (s1 ‡ s2) † t.
+  Proof.
+    intro t; induction t as [| | t1 IHt1 t2 IHt2 | X];
+      intros t s1 s2 T HTt; simpl in *; try reflexivity.
+    - rewrite in_app_iff in HTt.
+      apply Decidable.not_or in HTt as [HTt1 HTt2].
+      f_equal; auto.
+    - unfold "‡". assert (X <> T) by intuition.
+      rewrite bind_complete by assumption.
+      reflexivity.
+  Qed.
+  
   Lemma Ctsub_empty : forall C,
-      Ctsub ∅%env C = C.
+      Ctsub ∅ C = C.
   Proof.
     intro C; induction C as [| [l r] C IHC]; simpl; auto.
     repeat rewrite tsub_empty. rewrite IHC. reflexivity.
   Qed.
 
   Lemma Ctsub_not_in_tvars : forall C T t s,
-      ~ In T (Ctvars C) ->
-      Ctsub (T ↦ t;; s)%env C = Ctsub s C.
+      T ∉ Ctvars C ->
+      Ctsub (T ↦ t;; s) C = Ctsub s C.
   Proof.
     intro C; induction C as [| [l r] C IHC];
       intros T t s HT; simpl in *; auto.
@@ -197,7 +266,7 @@ Section TSub.
     rewrite IHC by auto. reflexivity.
   Qed.
   
-  Lemma tsub_gamma_empty : forall g : gamma, (∅ × g = g)%env.
+  Lemma tsub_gamma_empty : forall g : gamma, (∅ × g = g).
   Proof.
     intros g. extensionality n.
     unfold env_map.
@@ -206,8 +275,8 @@ Section TSub.
   Qed.
 
   Lemma tsub_gamma_not_in_tvars : forall T t (g : gamma) (s : tenv),
-      (forall x tx, g x = Some tx -> ~ In T (tvars tx)) ->
-      ((T ↦ t;; s) × g = s × g)%env.
+      (forall x tx, g x = Some tx -> T ∉ tvars tx) ->
+      ((T ↦ t;; s) × g = s × g).
   Proof.
     intros T t g s Hg.
     extensionality y.
@@ -217,12 +286,10 @@ Section TSub.
     apply Hg in Hgy. f_equal.
     apply tsub_not_in_tvars; auto.
   Qed.
-
-  Open Scope set_scope.
   
   Lemma tsub_length_count_tvars : forall τ t T,
       T ∉ tvars t ->
-      length (tvars ((T ↦ t;; ∅)%env † τ)) =
+      length (tvars ((T ↦ t;; ∅) † τ)) =
       count T (tvars τ) * length (tvars t) +
       length (tvars τ) - count T (tvars τ).
   Proof.
@@ -242,7 +309,7 @@ Section TSub.
   Lemma tsub_uniques_tvars_perm : forall τ t T,
       T ∉ tvars t -> T ∈ tvars τ ->
       Permutation
-        (uniques (tvars ((T ↦ t;; ∅)%env † τ)))
+        (uniques (tvars ((T ↦ t;; ∅) † τ)))
         (uniques (remove T (tvars τ) ∪ tvars t)).
   Proof.
     intro t; induction t as [| | t1 IHt1 t2 IHt2 | x];
@@ -279,7 +346,7 @@ Section TSub.
   Lemma Ctsub_perm_uniques_Ctvars : forall C t T,
       T ∉ tvars t -> T ∈ Ctvars C ->
       Permutation
-        (uniques (Ctvars (Ctsub (T ↦ t ;; ∅)%env C)))
+        (uniques (Ctvars (Ctsub (T ↦ t ;; ∅) C)))
         (uniques (remove T (Ctvars C) ∪ tvars t)).
   Proof.
     intro C; induction C as [| [l r] C];
@@ -330,8 +397,8 @@ Section TSub.
                 ++ tvars r)).
       + apply perm_trans with
             (uniques
-               ((tvars ((T ↦ t;; ∅)%env † l)
-                       ++ Ctvars (Ctsub (T ↦ t;; ∅)%env C))
+               ((tvars ((T ↦ t;; ∅) † l)
+                       ++ Ctvars (Ctsub (T ↦ t;; ∅) C))
                   ++ tvars r)).
         * apply uniques_perm.
           repeat rewrite <- app_assoc.
@@ -355,7 +422,7 @@ Section TSub.
       apply perm_trans with
           (uniques ((remove T (tvars l) ++ tvars t)
                       ++ tvars r ++ Ctvars C)).
-      + rewrite (uniques_app (tvars ((T ↦ t;; ∅)%env † l))).
+      + rewrite (uniques_app (tvars ((T ↦ t;; ∅) † l))).
         rewrite (uniques_app (remove T (tvars l) ++ tvars t)).
         apply uniques_perm.
         apply Permutation_app_tail. assumption.
@@ -406,7 +473,7 @@ Section TSub.
   
   Lemma tsub_length_uniques_tvars : forall τ t T,
       T ∉ tvars t -> T ∈ tvars τ ->
-      length (uniques (tvars ((T ↦ t;; ∅)%env † τ))) =
+      length (uniques (tvars ((T ↦ t;; ∅) † τ))) =
       length (uniques (tvars τ ∪ tvars t)) - 1.
   Proof.
     intros τ t T HTt HTτ.
@@ -430,7 +497,7 @@ Section TSub.
 
   Lemma Ctsub_length_uniques_Ctvars : forall C t T,
       T ∉ tvars t -> T ∈ Ctvars C ->
-      length (uniques (Ctvars (Ctsub (T ↦ t ;; ∅)%env C))) =
+      length (uniques (Ctvars (Ctsub (T ↦ t ;; ∅) C))) =
       length (uniques (Ctvars C ∪ tvars t)) - 1.
   Proof.
     intros C t T HTt HTC.

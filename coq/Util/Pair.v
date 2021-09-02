@@ -1,4 +1,4 @@
-Require Export Coq.micromega.Lia CoqRecon.Base.
+Require Export Coq.micromega.Lia CoqRecon.Util.Base.
 Require Import Coq.Relations.Relation_Operators
         Coq.Wellfounded.Lexicographic_Product
         Coq.Logic.FunctionalExtensionality Wf_nat.

@@ -1,16 +1,20 @@
 -Q . CoqRecon
 
-Base.v
-DeclTyping.v
-Env.v
-EqDecInst.v
-ListLib.v
-Maybe.v
 Mono/Mono.v
 Mono/Computes.v
 Mono/Completeness.v
-Pair.v
-Sets.v
-Term.v
-Typ.v
-Unify.v
+
+Syntax/DeclTyping.v
+Syntax/Term.v
+Syntax/Typ.v
+
+Util/Base.v
+Util/Env.v
+Util/EqDecInst.v
+Util/ListLib.v
+Util/Maybe.v
+Util/Pair.v
+Util/Sets.v
+
+Unify/Unify.v
+Unify/Properties.v

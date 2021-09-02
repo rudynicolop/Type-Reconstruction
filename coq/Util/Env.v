@@ -1,6 +1,6 @@
 Require Export Coq.Classes.EquivDec
         Coq.Logic.FunctionalExtensionality
-        CoqRecon.Sets CoqRecon.Maybe.
+        CoqRecon.Util.Sets CoqRecon.Util.Maybe.
 
 Section Env.
   Context {K V : Set}.

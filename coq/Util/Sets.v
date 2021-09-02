@@ -1,4 +1,4 @@
-Require Export Coq.Bool.Bool CoqRecon.ListLib.
+Require Export Coq.Bool.Bool CoqRecon.Util.ListLib.
 
 Declare Scope set_scope.
 Delimit Scope set_scope with set.
@@ -258,6 +258,12 @@ Section Sets.
   Qed.
 
   Local Hint Resolve member_In : core.
+
+  Lemma In_member_iff : forall a l,
+      member a l = true <-> In a l.
+  Proof.
+    intuition.
+  Qed.
   
   Lemma In_member_reflects : reflects (@In A) member.
   Proof.

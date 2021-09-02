@@ -1,6 +1,6 @@
 Require Export Coq.Lists.List
         Coq.Sorting.Permutation
-        CoqRecon.Base Coq.micromega.Lia
+        CoqRecon.Util.Base Coq.micromega.Lia
         Coq.Arith.Compare_dec.
 Export ListNotations.
 

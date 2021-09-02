@@ -1,4 +1,4 @@
-Require Export CoqRecon.Typ.
+Require Export CoqRecon.Syntax.Typ.
 
 Inductive op : Set :=
 | And | Or | Add | Sub | Eq | Lt.
