@@ -1,20 +1,5 @@
--Q . CoqRecon
-
-Mono/Mono.v
-Mono/Computes.v
-Mono/Completeness.v
-
-Syntax/DeclTyping.v
-Syntax/Term.v
-Syntax/Typ.v
-
-Util/Base.v
-Util/Env.v
-Util/EqDecInst.v
-Util/ListLib.v
-Util/Maybe.v
-Util/Pair.v
-Util/Sets.v
-
-Unify/Unify.v
-Unify/Properties.v
+-Q _build/default/lib        CoqRecon
+-Q _build/default/lib/Mono   CoqRecon.Mono
+-Q _build/default/lib/Syntax CoqRecon.Syntax
+-Q _build/default/lib/Unify  CoqRecon.Unify
+-Q _build/default/lib/Util   CoqRecon.Util
