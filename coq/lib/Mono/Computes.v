@@ -14,35 +14,26 @@ Fixpoint cgen (u used : list nat) (g : gamma) (e : term)
   match e with
   | Bool _ => Some (TBool,[],[])
   | Nat _  => Some (TNat,[],[])
-  | Var x  => t ↤ g x;; (t,[],[])
-  | (λ x ⇒ e)%term =>
+  | Var x  => let! t := g x in (t,[],[])
+  | λ x ⇒ e =>
     let F := 1 + list_max used in
-    cgen (F :: u) (F :: used) (x ↦ TVar F;; g)%env e >>|
-         fun '(t,X,C) => ((TVar F → t)%typ, F :: X, C)
-  | (e1 ⋅ e2)%term =>
-    cgen u used g e1 >>=
-         fun '(t1,X1,C1) =>
-           cgen u (used ++ X1) g e2 >>|
-                fun '(t2,X2,C2) =>
-                  let T := 1 + list_max (X1 ++ X2 ++ used) in
-                  (TVar T, T :: X1 ++ X2,
-                   (t1,(t2 → TVar T)%typ) :: C1 ++ C2)
+    let! (t,X,C) := cgen (F :: u) (F :: used) (x ↦ TVar F;; g) e in
+    (F → t, F :: X, C)
+  | e1 ⋅ e2 =>
+    let* (t1,X1,C1) := cgen u used g e1 in
+    let! (t2,X2,C2) := cgen u (used ++ X1) g e2 in
+    let T := 1 + list_max (X1 ++ X2 ++ used) in
+    (TVar T, T :: X1 ∪ X2, (t1, t2 → T) :: C1 ∪ C2)
   | Cond e1 e2 e3 =>
-    cgen u used g e1 >>=
-         fun '(t1,X1,C1) =>
-           cgen u (used ++ X1) g e2 >>=
-                fun '(t2,X2,C2) =>
-                  cgen u (used ++ X1 ++ X2) g e3 >>|
-                       fun '(t3,X3,C3) =>
-                         (t2, X1 ∪ X2 ∪ X3,
-                          (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)%set
+    let* (t1,X1,C1) := cgen u used g e1 in
+    let* (t2,X2,C2) := cgen u (used ++ X1) g e2 in
+    let! (t3,X3,C3) := cgen u (used ++ X1 ++ X2) g e3 in
+    (t2, X1 ∪ X2 ∪ X3, (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)
   | Op o e1 e2 =>
     let (t,t') := typs_of_op o in
-    cgen u used g e1 >>=
-         fun '(t1,X1,C1) =>
-           cgen u (used ++ X1) g e2 >>|
-                fun '(t2,X2,C2) =>
-                  (t', X1 ++ X2, (t,t1) :: (t,t2) :: C1 ++ C2)
+    let* (t1,X1,C1) := cgen u used g e1 in
+    let! (t2,X2,C2) := cgen u (used ++ X1) g e2 in
+    (t', X1 ∪ X2, (t,t1) :: (t,t2) :: C1 ++ C2)
   end.
 
 Fixpoint cgen' (used : list nat) (g : gamma) (e : term)
@@ -50,35 +41,26 @@ Fixpoint cgen' (used : list nat) (g : gamma) (e : term)
   match e with
   | Bool _ => Some (TBool,[],[])
   | Nat _  => Some (TNat,[],[])
-  | Var x  => t ↤ g x;; (t,[],[])
-  | (λ x ⇒ e)%term =>
+  | Var x  => let! t := g x in (t,[],[])
+  | λ x ⇒ e =>
     let F := 1 + list_max used in
-    cgen' (F :: used) (x ↦ TVar F;; g)%env e >>|
-         fun '(t,X,C) => ((TVar F → t)%typ, F :: X, C)
-  | (e1 ⋅ e2)%term =>
-    cgen' used g e1 >>=
-         fun '(t1,X1,C1) =>
-           cgen' (used ++ X1) g e2 >>|
-                fun '(t2,X2,C2) =>
-                  let T := 1 + list_max (X1 ++ X2 ++ used) in
-                  (TVar T, T :: X1 ++ X2,
-                   (t1,(t2 → TVar T)%typ) :: C1 ++ C2)
+    let! (t,X,C) := cgen' (F :: used) (x ↦ TVar F;; g)%env e in
+    (F → t, F :: X, C)
+  | e1 ⋅ e2 =>
+    let* (t1,X1,C1) := cgen' used g e1 in
+    let! (t2,X2,C2) := cgen' (used ++ X1) g e2 in
+    let T := 1 + list_max (X1 ++ X2 ++ used) in
+    (TVar T, T :: X1 ∪ X2, (t1, t2 → T) :: C1 ∪ C2)
   | Cond e1 e2 e3 =>
-    cgen' used g e1 >>=
-         fun '(t1,X1,C1) =>
-           cgen' (used ++ X1) g e2 >>=
-                fun '(t2,X2,C2) =>
-                  cgen' (used ++ X1 ++ X2) g e3 >>|
-                       fun '(t3,X3,C3) =>
-                         (t2, X1 ∪ X2 ∪ X3,
-                          (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)%set
+    let* (t1,X1,C1) := cgen' used g e1 in
+    let* (t2,X2,C2) := cgen' (used ++ X1) g e2 in
+    let! (t3,X3,C3) := cgen' (used ++ X1 ++ X2) g e3 in
+    (t2, X1 ∪ X2 ∪ X3, (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)
   | Op o e1 e2 =>
     let (t,t') := typs_of_op o in
-    cgen' used g e1 >>=
-         fun '(t1,X1,C1) =>
-           cgen' (used ++ X1) g e2 >>|
-                fun '(t2,X2,C2) =>
-                  (t', X1 ++ X2, (t,t1) :: (t,t2) :: C1 ++ C2)
+    let* (t1,X1,C1) := cgen' used g e1 in
+    let! (t2,X2,C2) := cgen' (used ++ X1) g e2 in
+    (t', X1 ∪ X2, (t,t1) :: (t,t2) :: C1 ∪ C2)
   end.
 
 Section CGEN.

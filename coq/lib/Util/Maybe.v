@@ -22,12 +22,14 @@ Notation "o '>>=' f"
 Notation "o '>>|' f"
   := (omap f o)
        (at level 50, left associativity) : maybe_scope.
-Notation "a '<-' o ';;' b"
+Notation "'let*' a ':=' o 'in' b"
   := (obind (fun a => b) o)
-       (at level 60, right associativity) : maybe_scope.
-Notation "a '↤' o ';;' b"
+       (at level 60, a pattern,
+        right associativity) : maybe_scope.
+Notation "'let!' a ':=' o 'in' b"
   := (omap (fun a => b) o)
-       (at level 60, right associativity) : maybe_scope.
+       (at level 60, a pattern,
+        right associativity) : maybe_scope.
 
 Ltac maybe_simpl :=
   unfold ">>|","∘",">>=",omap,obind; simpl.

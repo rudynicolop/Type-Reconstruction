@@ -60,25 +60,25 @@ Section ComputeUnify.
           match lt_eq_lt_dec L R with
           | inleft (left _) =>
             let s' := L ↦ r;; ∅ in
-            s ↤ unify (Ctsub s' C);; s ‡ s'
+            let! s := unify (Ctsub s' C) in s ‡ s'
           | inleft (right _) =>
             None
           | inright (_) =>
             let s' := R ↦ l;; ∅ in
-            s ↤ unify (Ctsub s' C);; s ‡ s'
+            let! s := unify (Ctsub s' C) in s ‡ s'
           end
         | TVar L, _ =>
           if member L (tvars r) then
             None
           else
             let s' := L ↦ r;; ∅ in
-            s ↤ unify (Ctsub s' C);; s ‡ s'
+            let! s := unify (Ctsub s' C) in s ‡ s'
         | _, TVar R =>
           if member R (tvars l) then
             None
           else
             let s' := R ↦ l;; ∅ in
-            s ↤ unify (Ctsub s' C);; s ‡ s'
+            let! s := unify (Ctsub s' C) in s ‡ s'
         | l → l', r → r' =>
           unify ((l,r) :: (l',r') :: C)
         | _, _ => None

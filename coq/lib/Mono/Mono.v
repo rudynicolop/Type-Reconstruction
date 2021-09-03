@@ -3,6 +3,7 @@ Require Export Coq.micromega.Lia CoqRecon.Syntax.DeclTyping.
 Reserved Notation "g ⊢ e ∴ t ⊣ X ≀ C" (at level 70).
 
 Open Scope set_scope.
+Open Scope env_scope.
 
 Inductive constraint_typing (Γ : gamma)
   : term -> typ -> list nat -> list (typ * typ) -> Prop :=
@@ -15,8 +16,8 @@ Inductive constraint_typing (Γ : gamma)
     Γ ⊢ x ∴ τ ⊣ [] ≀ []
 | ct_abs x e T τ X C :
     T ∉ X ->
-    (x ↦ TVar T ;; Γ)%env ⊢ e ∴ τ ⊣ X ≀ C ->
-    Γ ⊢ (λ x ⇒ e)%term ∴ (TVar T → τ)%typ ⊣ (T :: X) ≀ C
+    (x ↦ TVar T ;; Γ) ⊢ e ∴ τ ⊣ X ≀ C ->
+    Γ ⊢ (λ x ⇒ e) ∴ (TVar T → τ) ⊣ (T :: X) ≀ C
 | ct_app e1 e2 T τ1 τ2 X1 X2 C1 C2 :
     X1 ∩ X2 = [] ->
     X1 ∩ tvars τ2 = [] ->
@@ -58,7 +59,7 @@ Section Sound.
       Γ ⊢ e ∴ t ⊣ X ≀ C ->
       forall σ,
         Forall (uncurry (satisfy σ)) C ->
-        (σ × Γ)%env ⊨ e ∴ (σ † t).
+        (σ × Γ) ⊨ e ∴ (σ † t).
   Proof.
     intros g e t X C H; induction H; intros s HC; eauto.
     - apply IHconstraint_typing in HC.

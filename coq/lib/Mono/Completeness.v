@@ -3,7 +3,7 @@ Require Export CoqRecon.Mono.Mono.
 (** Completeness is never true :(. *)
 
 Lemma tsub_twice : forall t s,
-    ((s ‡ s)%env † t = s † s † t)%typ.
+    (s ‡ s) † t = s † s † t.
 Proof.
   intro t;
     induction t as [| | t1 IHt1 t2 IHt2 | T];
@@ -15,7 +15,7 @@ Proof.
 Qed.
 
 Lemma tsub_gamma_twice : forall (s : tenv) (g : gamma),
-    (s ‡ s × g = s × s × g)%env.
+    s ‡ s × g = s × s × g.
 Proof.
   intros s g. extensionality T.
   unfold "×", env_map.
@@ -32,7 +32,7 @@ Section Complete.
   Local Hint Constructors Permutation : core.
 
   Lemma tvars_subset : forall Γ e τ X C,
-      Γ ⊢ e ∴ τ ⊣ X ≀ C -> (Ctvars C ⊆ X)%set.
+      Γ ⊢ e ∴ τ ⊣ X ≀ C -> (Ctvars C ⊆ X).
   Proof.
     intros g e t X C H; induction H;
       simpl; try firstorder.
@@ -48,7 +48,7 @@ Section Complete.
 
   (* Pierce's proof in TAPL relies upon this assumption. *)
   Lemma tsub_inverse : forall t s,
-      exists t', (s † t')%typ = t /\ forall n, In n (tvars t') -> s n = None.
+      exists t', s † t' = t /\ forall n, n ∈ tvars t' -> s n = None.
   Proof.
     intros t s;
       induction t as
@@ -73,10 +73,10 @@ Section Complete.
   Theorem complete_weak : forall Γ e t X C,
       Γ ⊢ e ∴ t ⊣ X ≀ C ->
       forall σ τ,
-        (σ × Γ)%env ⊨ e ∴ τ ->
-        (forall m, In m X -> σ m = None) ->
+        (σ × Γ) ⊨ e ∴ τ ->
+        (forall m, m ∈ X -> σ m = None) ->
         exists σ', Forall (uncurry (satisfy σ')) C /\
-              (σ' † t = τ)%typ /\ (mask σ' X = σ)%env.
+              σ' † t = τ /\ mask σ' X = σ.
   Proof.
     intros g e τ X C H; induction H;
       intros s t Ht Hd; inv Ht;
