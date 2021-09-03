@@ -1,3 +1,9 @@
+# Build artifacts
+_build/
+*.exe
+coqrecon.install
+.merlin
+
 # Coq files
 
 .*.aux
@@ -37,6 +43,8 @@ nra.cache
 Makefile.coq*
 .Makefile.coq*
 CoqMakefile.conf
+
+# Emacs files
 
 .#*
 \#
