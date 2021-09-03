@@ -9,58 +9,36 @@ Definition typs_of_op (o : op) : typ * typ :=
   | Eq  | Lt  => (TNat,  TBool)
   end.
 
-Fixpoint cgen (u used : list nat) (g : gamma) (e : term)
+(** [cgen ing used g e = Some (τ, χ, C)]
+    iff [cgen] is able to produce
+    a type [τ] with constraints [C].
+    [used] is the type names used thus far,
+    whereas [ing] is the type names used in [g]. *)
+Fixpoint cgen (ing used : list nat) (g : gamma) (e : term)
   : option (typ * list nat * list (typ * typ)) :=
   match e with
   | Bool _ => Some (TBool,[],[])
   | Nat _  => Some (TNat,[],[])
   | Var x  => let! t := g x in (t,[],[])
   | λ x ⇒ e =>
-    let F := 1 + list_max used in
-    let! (t,X,C) := cgen (F :: u) (F :: used) (x ↦ TVar F;; g) e in
-    (F → t, F :: X, C)
+    let T := 1 + list_max (ing ∪ used) in
+    let! (t,χ,C) := cgen (T :: ing) used (x ↦ TVar T;; g) e in
+    (T → t, T :: χ, C)
   | e1 ⋅ e2 =>
-    let* (t1,X1,C1) := cgen u used g e1 in
-    let! (t2,X2,C2) := cgen u (used ++ X1) g e2 in
-    let T := 1 + list_max (X1 ++ X2 ++ used) in
-    (TVar T, T :: X1 ∪ X2, (t1, t2 → T) :: C1 ∪ C2)
+    let* (t1,χ1,C1) := cgen ing used g e1 in
+    let! (t2,χ2,C2) := cgen ing (used ∪ χ1) g e2 in
+    let T := 1 + list_max (ing ∪ used ∪ χ1 ∪ χ2) in
+    (TVar T, T :: χ1 ∪ χ2, (t1, t2 → T) :: C1 ∪ C2)
   | Cond e1 e2 e3 =>
-    let* (t1,X1,C1) := cgen u used g e1 in
-    let* (t2,X2,C2) := cgen u (used ++ X1) g e2 in
-    let! (t3,X3,C3) := cgen u (used ++ X1 ++ X2) g e3 in
-    (t2, X1 ∪ X2 ∪ X3, (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)
+    let* (t1,χ1,C1) := cgen ing used g e1 in
+    let* (t2,χ2,C2) := cgen ing (used ∪ χ1) g e2 in
+    let! (t3,χ3,C3) := cgen ing (used ∪ χ1 ∪ χ2) g e3 in
+    (t2, χ1 ∪ χ2 ∪ χ3, (t1, TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)
   | Op o e1 e2 =>
     let (t,t') := typs_of_op o in
-    let* (t1,X1,C1) := cgen u used g e1 in
-    let! (t2,X2,C2) := cgen u (used ++ X1) g e2 in
-    (t', X1 ∪ X2, (t,t1) :: (t,t2) :: C1 ++ C2)
-  end.
-
-Fixpoint cgen' (used : list nat) (g : gamma) (e : term)
-  : option (typ * list nat * list (typ * typ)) :=
-  match e with
-  | Bool _ => Some (TBool,[],[])
-  | Nat _  => Some (TNat,[],[])
-  | Var x  => let! t := g x in (t,[],[])
-  | λ x ⇒ e =>
-    let F := 1 + list_max used in
-    let! (t,X,C) := cgen' (F :: used) (x ↦ TVar F;; g)%env e in
-    (F → t, F :: X, C)
-  | e1 ⋅ e2 =>
-    let* (t1,X1,C1) := cgen' used g e1 in
-    let! (t2,X2,C2) := cgen' (used ++ X1) g e2 in
-    let T := 1 + list_max (X1 ++ X2 ++ used) in
-    (TVar T, T :: X1 ∪ X2, (t1, t2 → T) :: C1 ∪ C2)
-  | Cond e1 e2 e3 =>
-    let* (t1,X1,C1) := cgen' used g e1 in
-    let* (t2,X2,C2) := cgen' (used ++ X1) g e2 in
-    let! (t3,X3,C3) := cgen' (used ++ X1 ++ X2) g e3 in
-    (t2, X1 ∪ X2 ∪ X3, (t1,TBool) :: (t2,t3) :: C1 ∪ C2 ∪ C3)
-  | Op o e1 e2 =>
-    let (t,t') := typs_of_op o in
-    let* (t1,X1,C1) := cgen' used g e1 in
-    let! (t2,X2,C2) := cgen' (used ++ X1) g e2 in
-    (t', X1 ∪ X2, (t,t1) :: (t,t2) :: C1 ∪ C2)
+    let* (t1,χ1,C1) := cgen ing used g e1 in
+    let! (t2,χ2,C2) := cgen ing (used ∪ χ1) g e2 in
+    (t', χ1 ∪ χ2, (t,t1) :: (t,t2) :: C1 ∪ C2)
   end.
 
 Section CGEN.
@@ -153,16 +131,17 @@ Section CGEN.
   
   Local Hint Resolve list_max_ge_in : core.
 
-  Lemma cgen_used_X : forall e u used g t X C,
-      cgen u used g e = Some (t,X,C) ->
-      forall T, In T X -> list_max used < T.
+  Lemma cgen_used_X : forall e ing used g t X C,
+      cgen ing used g e = Some (t,X,C) ->
+      forall T, T ∈ X -> list_max (ing ∪ used) < T.
   Proof.
     cgen_ind; intros T HX; simpl in *; try lia.
     - destruct HX as [HX | HX]; subst; try lia.
       eapply IHe with (T := T) in Heqo; eauto.
       replace (list_max (S (list_max used) :: used))
         with (list_max ([S (list_max used)] ++ used)) in Heqo by auto.
-      rewrite list_max_app in Heqo. lia.
+      repeat rewrite list_max_app in *.
+      (*
     - repeat rewrite list_max_app in HX.
       rewrite in_app_iff in HX.
       destruct HX as [HX | [HX | HX]]; subst; try lia.
@@ -181,30 +160,33 @@ Section CGEN.
       + eapply IHe1 in Heqo0; eauto.
       + eapply IHe2 in Heqo1; eauto.
         rewrite list_max_app in Heqo1; lia.
-  Qed.
+  Qed.*)
+  Abort.
 
-  Local Hint Resolve cgen_used_X : core.
+  (*Local Hint Resolve cgen_used_X : core.*)
   
-  Corollary cgen_used : forall e u used g t X C,
-      cgen u used g e = Some (t,X,C) ->
-      forall T, In T used -> ~ In T X.
+  Corollary cgen_used : forall e ing used g t X C,
+      cgen ing used g e = Some (t,X,C) ->
+      forall T, T ∈ (ing ∪ used) -> T ∉ X.
   Proof.
+    (*
     intros e u used g t X C Hgen T Hused HX.
     pose proof cgen_used_X _ _ _ _ _ _ _ Hgen _ HX.
     assert (T <= list_max used).
     { pose proof list_max_ge used as HM.
       rewrite Forall_forall in HM; eauto. }
     lia.
-  Qed.
+  Qed.*)
+  Abort.
 
-  Local Hint Resolve cgen_used : core.
+  (*Local Hint Resolve cgen_used : core.*)
   
-  Lemma cgen_tvars : forall e u used g t X C,
-      cgen u used g e = Some (t,X,C) ->
-      (u ⊆ used)%set ->
-      (forall x t, g x = Some t -> (tvars t ⊆ u)%set) ->
-      (tvars t ⊆ u ∪ X)%set.
+  Lemma cgen_tvars : forall e ing used g t X C,
+      cgen ing used g e = Some (t,X,C) ->
+      (forall x t, g x = Some t -> tvars t ⊆ ing) ->
+      tvars t ⊆ ing ∪ X.
   Proof.
+    (*
     unfold "⊆".
     cgen_ind; intros Hu Hg T HT; simpl in *;
       repeat rewrite in_app_iff in *;
@@ -219,34 +201,25 @@ Section CGEN.
       intuition.
     - erewrite typs_of_op_tvars_r in HT; eauto.
       simpl in HT; contradiction.
-  Qed.
+  Qed.*)
+  Abort.
 
-  Local Hint Resolve cgen_tvars : core.
+  (*Local Hint Resolve cgen_tvars : core.*)
 
   Lemma In_Ctvars_app : forall C1 C2 X,
-      In X (Ctvars (C1 ∪ C2)%set) <-> In X (Ctvars C1) \/ In X (Ctvars C2).
+      X ∈ Ctvars (C1 ∪ C2) <-> X ∈ Ctvars C1 \/ X ∈ Ctvars C2.
   Proof.
     intro C1; induction C1 as [| [l1 r2] C1 IHC1];
       intros C2 X; simpl in *; intuition;
         repeat rewrite in_app_iff in *;
         rewrite IHC1 in *; intuition.
   Qed.
-
-  (** Invalid. *)
-  Lemma cgen_Ctvars_tvars : forall e u used g t X C,
-      cgen u used g e = Some (t,X,C) ->
-      (u ⊆ used)%set ->
-      (forall x t, g x = Some t -> (tvars t ⊆ u)%set) ->
-      (Ctvars C ⊆ tvars t)%set.
-  Proof.
-  Abort.
   
-  Lemma cgen_Ctvars : forall e u used g t X C,
-      cgen u used g e = Some (t,X,C) ->
-      (u ⊆ used)%set ->
-      (forall x t, g x = Some t -> (tvars t ⊆ u)%set) ->
-      (Ctvars C ⊆ u ∪ X)%set.
-  Proof.
+  Lemma cgen_Ctvars : forall e ing used g t X C,
+      cgen ing used g e = Some (t,X,C) ->
+      (forall x t, g x = Some t -> tvars t ⊆ ing) ->
+      Ctvars C ⊆ ing ∪ X.
+  Proof. (*
     unfold "⊆".
     cgen_ind; intros Hu Hg T HT; simpl in *;
       repeat rewrite in_app_iff in *;
@@ -312,9 +285,10 @@ Section CGEN.
       + eapply IHe2 in Heqo1; eauto; try solve_stupid.
         repeat rewrite in_app_iff in Heqo1.
         intuition.
-  Qed.
+  Qed. *)
+  Abort.
 
-  Local Hint Resolve cgen_Ctvars : core.
+  (*Local Hint Resolve cgen_Ctvars : core.*)
 
   Lemma list_max_cons : forall n l,
       list_max (n :: l) = Nat.max n (list_max l).
@@ -327,12 +301,11 @@ Section CGEN.
   Local Hint Resolve Subset_l_union : core.
   Local Hint Resolve Subset_r_union : core.
   
-  Theorem cgen_sound : forall e u used g t X C,
-      cgen u used g e = Some (t,X,C) ->
-      (u ⊆ used)%set ->
-      (forall x t, g x = Some t -> (tvars t ⊆ u)%set) ->
+  Theorem cgen_sound : forall e ing used g t X C,
+      cgen ing used g e = Some (t,X,C) ->
+      (forall x t, g x = Some t -> tvars t ⊆ ing) ->
       g ⊢ e ∴ t ⊣ X ≀ C.
-  Proof.
+  Proof. (*
     cgen_ind; intros Hu Hg; eauto.
     - constructor; eauto.
       + eapply cgen_used in Heqo; eauto; intuition.
@@ -558,70 +531,19 @@ Section CGEN.
         eapply cgen_used_X in Heqo1 as H2; eauto.
         repeat rewrite list_max_app in *.
         assert (T <= list_max l) by eauto; lia.
-  Qed.
+  Qed. *)
+  Abort.
 
   Theorem cgen_sound_clean : forall e t X C,
       cgen [] [] ∅%env e = Some (t,X,C) ->
       ∅%env ⊢ e ∴ t ⊣ X ≀ C.
-  Proof.
+  Proof. (*
     intros e t X C H.
     eapply cgen_sound; eauto.
     - unfold "⊆"; simpl; intuition.
     - intros x t'; unfold "∅"; try discriminate.
-  Qed.
-
-  Lemma cgen_cgen' : forall e u used g,
-      cgen u used g e = cgen' used g e.
-  Proof.
-    intro e;
-      induction e as
-        [ x
-        | x e IHe
-        | e1 IHe1 e2 IHe2
-        | b | n
-        | e1 IHe1 e2 IHe2 e3 IHe3
-        | o e1 IHe1 e2 IHe2 ]; intros u used g;
-        simpl in *; maybe_simpl; auto.
-    - rewrite IHe. reflexivity.
-    - rewrite IHe1.
-      destruct (cgen' used g e1) as [[[? ?] ?] |];
-        simpl; try reflexivity.
-      rewrite IHe2. reflexivity.
-    - rewrite IHe1.
-      destruct (cgen' used g e1) as [[[? ?] ?] |];
-        simpl; try reflexivity.
-      rewrite IHe2.
-      destruct (cgen' (used ∪ l)%set g e2) as [[[? ?] ?] |];
-        simpl; try reflexivity.
-      rewrite IHe3. reflexivity.
-    - destruct (typs_of_op o) as [? ?].
-      rewrite IHe1.
-      destruct (cgen' used g e1) as [[[? ?] ?] |];
-        simpl; try reflexivity.
-      rewrite IHe2. reflexivity.
-  Qed.
-
-  Local Hint Resolve cgen_sound : core.
-  Local Hint Resolve cgen_sound_clean : core.
-
-  Theorem cgen'_sound : forall e used g t X C,
-      cgen' used g e = Some (t,X,C) ->
-      (forall x t, g x = Some t -> (tvars t ⊆ used)%set) ->
-      g ⊢ e ∴ t ⊣ X ≀ C.
-  Proof.
-    intros e used g t X C H Hg.
-    rewrite <- cgen_cgen' with (u := used) in H.
-    eapply cgen_sound; eauto.
-    unfold "⊆"; simpl; auto.
-  Qed.
-
-  Theorem cgen'_sound_clean : forall e t X C,
-      cgen' [] ∅%env e = Some (t,X,C) ->
-      ∅%env ⊢ e ∴ t ⊣ X ≀ C.
-  Proof.
-    intros e t X C H.
-    erewrite <- cgen_cgen' in H; eauto.
-  Qed.
+  Qed. *)
+  Abort.
 
   Lemma typs_of_op_complete : forall o t t',
       op_typs o t t' -> typs_of_op o = (t,t').
@@ -642,8 +564,8 @@ Section CGEN.
           exists t X' C',
             (σ † t = τ)%typ /\
             Ctsub σ C' = C /\
-            cgen' used g e = Some (t,X',C').
-  Proof.
+            cgen [] used g e = Some (t,X',C').
+  Proof. (*
     intros Γ e τ X C H;
       induction H;
       intros g s Hsg used Hused; simpl; maybe_simpl.
@@ -694,6 +616,6 @@ Section CGEN.
       repeat split; auto.
       + simpl. admit. (* Sudoku paradox. *)
       + admit. (* Sudoku paradox. *)
-    - (* This is masochistic... *)
+    - (* This is masochistic... *) *)
   Abort.
 End CGEN.
