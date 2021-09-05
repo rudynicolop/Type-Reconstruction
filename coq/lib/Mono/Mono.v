@@ -46,6 +46,11 @@ Inductive constraint_typing (Γ : gamma)
     Γ ⊢ Op o e1 e2 ∴ τ'
       ⊣ (X1 ∪ X2)
       ≀ ((τ,τ1) :: (τ,τ2) :: C1 ∪ C2)
+| ct_let x e1 e2 τ1 τ2 X1 X2 C1 C2 :
+    X1 ∩ X2 = [] ->
+    Γ ⊢ e1 ∴ τ1 ⊣ X1 ≀ C1 ->
+    (x ↦ τ1;; Γ) ⊢ e2 ∴ τ2 ⊣ X2 ≀ C2 ->
+    Γ ⊢ LET x e1 e2 ∴ τ2 ⊣ (X1 ∪ X2) ≀ (C1 ∪ C2)
 where "g ⊢ e ∴ t ⊣ X ≀ C"
         := (constraint_typing g e t X C).
 
@@ -87,5 +92,11 @@ Section Sound.
       apply IHconstraint_typing2 in HC2.
       unfold uncurry,satisfy in *.
       rewrite <- H5 in HC1; rewrite <- H7 in HC2. eauto.
+    - rewrite Forall_app in HC.
+      destruct HC as [HC1 HC2].
+      apply IHconstraint_typing1 in HC1.
+      apply IHconstraint_typing2 in HC2.
+      rewrite <- env_map_bind in HC2.
+      econstructor; eauto.
   Qed.
 End Sound.

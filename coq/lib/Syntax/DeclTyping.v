@@ -11,6 +11,7 @@ Inductive op_typs : op -> typ -> typ -> Prop :=
 | ot_lt  : op_typs ≦ TNat  TBool.
 
 Open Scope term_scope.
+Open Scope env_scope.
 
 Reserved Notation "g ⊨ e ∴ t" (at level 70).
 
@@ -23,7 +24,7 @@ Inductive typing (Γ : gamma) : term -> typ -> Prop :=
     bound x τ Γ ->
     Γ ⊨ x ∴ τ
 | t_abs x e τ τ' :
-    (x ↦ τ;; Γ)%env ⊨ e ∴ τ' ->
+    (x ↦ τ;; Γ) ⊨ e ∴ τ' ->
     Γ ⊨ (λ x ⇒ e) ∴ (τ → τ')
 | t_app e1 e2 τ τ' :
     Γ ⊨ e1 ∴ (τ → τ') ->
@@ -39,6 +40,10 @@ Inductive typing (Γ : gamma) : term -> typ -> Prop :=
     Γ ⊨ e1 ∴ τ ->
     Γ ⊨ e2 ∴ τ ->
     Γ ⊨ Op o e1 e2 ∴ τ'
+| t_let x e1 e2 τ τ' :
+    Γ ⊨ e1 ∴ τ ->
+    (x ↦ τ;; Γ) ⊨ e2 ∴ τ' ->
+    Γ ⊨ LET x e1 e2 ∴ τ'
 where "g ⊨ e ∴ t" := (typing g e t).
 
 Section Prez.
@@ -63,6 +68,8 @@ Section Prez.
     - constructor. unfold bound, env_map in *.
       rewrite H. reflexivity.
     - constructor.
+      rewrite env_map_bind; auto.
+    - econstructor; eauto.
       rewrite env_map_bind; auto.
   Qed.
 End Prez.

@@ -39,6 +39,10 @@ Fixpoint cgen (ing used : list nat) (g : gamma) (e : term)
     let* (t1,χ1,C1) := cgen ing used g e1 in
     let! (t2,χ2,C2) := cgen ing (used ∪ χ1) g e2 in
     (t', χ1 ∪ χ2, (t,t1) :: (t,t2) :: C1 ∪ C2)
+  | LET x e1 e2 =>
+    let* (t1,χ1,C1) := cgen ing used g e1 in
+    let! (t2,χ2,C2) := cgen (tvars t1 ∪ ing) (used ∪ χ1) (x ↦ t1;; g) e2 in
+    (t2, χ1 ∪ χ2, C1 ∪ C2)
   end.
 
 Section CGEN.
@@ -92,7 +96,8 @@ Section CGEN.
         | e1 IHe1 e2 IHe2
         | b | n
         | e1 IHe1 e2 IHe2 e3 IHe3
-        | o e1 IHe1 e2 IHe2 ]; intros u used g t X C Hgen;
+        | o e1 IHe1 e2 IHe2
+        | x e1 IHe1 e2 IHe2 ]; intros u used g t X C Hgen;
       simpl in *; maybe_simpl_hyp Hgen;
       (* var *)
       [ destruct (g x) as [tg |] eqn:Hgxeq
@@ -108,7 +113,9 @@ Section CGEN.
       | repeat cgen_simpl
       (* op *)
       | destruct (typs_of_op o) as [to t'] eqn:Hop;
-        simpl in *; repeat cgen_simpl ]; inv Hgen
+        simpl in *; repeat cgen_simpl
+      (* let *)
+      | repeat cgen_simpl ]; inv Hgen
     end.
 
   Ltac solve_dumb x Hg :=
@@ -184,6 +191,12 @@ Section CGEN.
       + eapply IHe1 in Heqo0; eauto.
       + eapply IHe2 in Heqo1; eauto.
         autorewrite with core in *; lia.
+    - rewrite in_app_iff in HX.
+      destruct HX as [HX | HX]; eauto.
+      eapply IHe2 in Heqo0; eauto.
+      apply list_max_ge_in in HX as HX'.
+      autorewrite with core in *.
+      repeat max_destruct.
   Qed.
 
   Ltac populate_cgen_used_X :=
@@ -238,6 +251,14 @@ Section CGEN.
       intuition.
     - erewrite typs_of_op_tvars_r in HT; eauto.
       simpl in HT; contradiction.
+    - eapply IHe2 in Heqo0; eauto.
+      + repeat rewrite in_app_iff in *. intuition.
+        eapply IHe1 in Heqo; eauto.
+        rewrite in_app_iff in *. intuition.
+      + intros y t' Hyt' Y HY. unfold bind in *.
+        dispatch_eqdec.
+        * inv Hyt'. intuition.
+        * eapply Hg in Hyt'; eauto. intuition.
   Qed.
 
   Ltac populate_cgen_tvars e H :=
@@ -327,6 +348,20 @@ Section CGEN.
       + eapply IHe2 in Heqo1; eauto; try solve_stupid.
         repeat rewrite in_app_iff in Heqo1.
         intuition.
+    - rewrite In_Ctvars_app in HT.
+      destruct HT as [HT | HT].
+      + eapply IHe1 in Heqo as HC1; eauto.
+        rewrite in_app_iff in *. intuition.
+      + eapply IHe2 in Heqo0 as HC2; eauto.
+        repeat rewrite in_app_iff in *. intuition.
+        * eapply cgen_tvars in Heqo as Ht1; eauto.
+          apply Ht1 in H0. rewrite in_app_iff in *.
+          intuition.
+        * intros y t' Hyt' Y HY.
+          unfold bind in Hyt'.
+          dispatch_eqdec.
+          -- inv Hyt'. intuition.
+          -- eapply Hg in Hyt'; eauto. intuition.
   Qed.
 
   Ltac populate_cgen_Ctvars e H :=
@@ -420,6 +455,20 @@ Section CGEN.
       eapply cgen_used_X in Heqo0 as H1; eauto.
       eapply cgen_used_X in Heqo1 as H2; eauto.
       eapply cgen_used in Heqo1 as H2'; eauto; intuition.
+    - econstructor; eauto.
+      + apply Inter_nil; unfold Intersection;
+          simpl; intro T; split; try contradiction;
+            intros [HT1 HT2].
+        eapply cgen_used_X in Heqo as H1; eauto.
+        eapply cgen_used_X in Heqo0 as H2; eauto.
+        eapply cgen_used in Heqo0 as H2'; eauto; intuition.
+      + eapply IHe2; eauto.
+        intros y ty Hyty Y HY.
+        unfold bind in Hyty.
+        dispatch_eqdec.
+        * inv Hyty. intuition.
+        * eapply Hg in Hyty; eauto.
+          intuition.
   Qed.
 
   Theorem cgen_sound_clean : forall e t X C,
