@@ -20,7 +20,8 @@ Inductive term : Set :=
 | Bool : bool -> term
 | Nat : nat -> term
 | Cond : term -> term -> term -> term
-| Op : op -> term -> term -> term.
+| Op : op -> term -> term -> term
+| LET : string -> term -> term -> term.
 
 Declare Scope term_scope.
 Delimit Scope term_scope with term.
