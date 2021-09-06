@@ -28,6 +28,23 @@ Section Env.
     dispatch_eqdec; reflexivity.
   Qed.
 
+  Lemma bind_diff_comm : forall x y u v e,
+      x <> y ->
+      bind x u (bind y v e) = bind y v (bind x u e).
+  Proof.
+    intros x y u v e Hxy; unfold bind.
+    extensionality k.
+    repeat dispatch_eqdec; auto.
+  Qed.
+
+  Lemma bind_same : forall x u v e,
+      bind x u (bind x v e) = bind x u e.
+  Proof.
+    intros x u v e; unfold bind.
+    extensionality k.
+    repeat dispatch_eqdec; auto.
+  Qed.
+
   Definition find (k : K) (e : env) : option V := e k.
 
   Definition bound (k : K) (v : V) (e : env) : Prop := e k = Some v.
@@ -76,6 +93,9 @@ Section Env.
 
   Definition range (e : env) (r : list V) : Prop :=
     forall v, In v r <-> exists k, e k = Some v.
+
+  Definition incl (e1 e2 : env) : Prop :=
+    forall k v, bound k v e1 -> bound k v e2.
 End Env.
 
 Section EnvMap.

@@ -1,4 +1,4 @@
-Require Export Coq.micromega.Lia CoqRecon.Syntax.DeclTyping.
+Require Export Coq.micromega.Lia CoqRecon.Semantics.DeclTyping.
 
 Reserved Notation "g ⊢ e ∴ t ⊣ X ≀ C" (at level 70).
 

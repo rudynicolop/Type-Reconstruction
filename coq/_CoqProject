@@ -1,5 +1,6 @@
--Q _build/default/lib        CoqRecon
--Q _build/default/lib/Mono   CoqRecon.Mono
--Q _build/default/lib/Syntax CoqRecon.Syntax
--Q _build/default/lib/Unify  CoqRecon.Unify
--Q _build/default/lib/Util   CoqRecon.Util
+-Q _build/default/lib           CoqRecon
+-Q _build/default/lib/Mono      CoqRecon.Mono
+-Q _build/default/lib/Semantics CoqRecon.Semantics
+-Q _build/default/lib/Syntax    CoqRecon.Syntax
+-Q _build/default/lib/Unify     CoqRecon.Unify
+-Q _build/default/lib/Util      CoqRecon.Util
