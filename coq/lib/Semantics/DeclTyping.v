@@ -8,7 +8,7 @@ Inductive op_typs : op -> typ -> typ -> Prop :=
 | ot_add : op_typs ⨥ TNat  TNat
 | ot_sub : op_typs ⨪ TNat  TNat
 | ot_eq  : op_typs ≅ TNat  TBool
-| ot_lt  : op_typs ≦ TNat  TBool.
+| ot_lt  : op_typs ⋖ TNat  TBool.
 
 Open Scope term_scope.
 Open Scope env_scope.

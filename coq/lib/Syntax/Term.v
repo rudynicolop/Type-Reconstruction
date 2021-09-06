@@ -11,7 +11,7 @@ Notation "∨" := Or (at level 0) : op_scope.
 Notation "⨥" := Add (at level 0) : op_scope.
 Notation "⨪" := Sub (at level 0) : op_scope.
 Notation "≅" := Eq (at level 0) : op_scope.
-Notation "≦" := Lt (at level 0) : op_scope.
+Notation "⋖" := Lt (at level 0) : op_scope.
 
 Inductive term : Set :=
 | Var : string -> term
