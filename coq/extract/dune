@@ -1,0 +1,8 @@
+(coq.extraction
+	(prelude Extract)
+	(theories CoqRecon)
+	(extracted_modules
+	DataTypes List))
+(library
+	(name coqrecon)
+	(public_name coqrecon))
