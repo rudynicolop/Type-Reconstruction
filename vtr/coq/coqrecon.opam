@@ -1,0 +1,18 @@
+opam-version: "2.0"
+version: "0.1.0"
+synopsis: "Verified Type-Reconstruction/Inference"
+maintainer: "rnp39@cornell.edu"
+authors: ["Rudy Nicolo Peterson <rnp39@cornell.edu>"]
+homepage: "https://github.com/rudynicolop/Type-Reconstruction"
+dev-repo: "git+https://github.com/rudynicolop/Type-Reconstruction"
+bug-reports: "https://github.com/rudynicolop/Type-Reconstruction/issues"
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]
+install: [
+  ["dune" "install"]
+]
+depends: [
+  "coq" {build}
+  "zarith"
+]
