@@ -2,7 +2,11 @@
 	(prelude Extract)
 	(theories CoqRecon)
 	(extracted_modules
-	DataTypes List))
+	Datatypes Nat Bool EquivDec List
+	Basics Specif PeanoNat Compare_dec
+	Base EqDecInst ListLib Sets Env Maybe Pair
+	Typ Term Reduce Computes Unify))
 (library
 	(name coqrecon)
-	(public_name coqrecon))
+	(public_name coqrecon)
+	(flags (:standard -w -33)))

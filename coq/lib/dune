@@ -2,6 +2,5 @@
  (name CoqRecon)
  (package coqrecon)
  (synopsis "Verified Type-Reconstruction")
- (modules (:standard))
-)
+ (modules (:standard)))
 (include_subdirs qualified)
