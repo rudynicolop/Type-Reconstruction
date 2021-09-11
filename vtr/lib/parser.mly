@@ -7,7 +7,7 @@
 %token AND OR ADD SUB EQ LT
 %token FUN DOT LET IN ASS
 %token <string> VAR
-%token <int> NAT
+%token <Z.t> NAT
 %token <bool> BOOL
 
 (** Start symbol. *)

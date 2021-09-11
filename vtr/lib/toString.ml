@@ -7,7 +7,7 @@ let rec string_of_typ (t : typ) : string =
     "(" ^ string_of_typ t1 ^ "→" ^ string_of_typ t2 ^ ")"
   | TNat   -> "ℕ"
   | TBool  -> "𝔹"
-  | TVar n -> "X" ^ string_of_int n
+  | TVar n -> "X" ^ Z.to_string n
 
 let string_of_op (o : op) : string =
   match o with
@@ -25,7 +25,7 @@ let rec string_of_term (e : term) : string =
     "(λ" ^ x ^ "." ^ string_of_term e ^ ")"
   | App (e1,e2) ->
     "(" ^ string_of_term e1 ^ " " ^ string_of_term e2 ^ ")"
-  | Nat  n -> string_of_int n
+  | Nat  n -> Z.to_string n
   | Bool b -> string_of_bool b
   | Cond (e1,e2,e3) ->
     "(if " ^ string_of_term e1 ^
