@@ -39,7 +39,7 @@ Fixpoint cgen (ing used : list nat) (g : gamma) (e : term)
     let* (t1,χ1,C1) := cgen ing used g e1 in
     let! (t2,χ2,C2) := cgen ing (used ∪ χ1) g e2 in
     (t', χ1 ∪ χ2, (t,t1) :: (t,t2) :: C1 ∪ C2)
-  | LET x e1 e2 =>
+  | LetIn x e1 e2 =>
     let* (t1,χ1,C1) := cgen ing used g e1 in
     let! (t2,χ2,C2) := cgen (tvars t1 ∪ ing) (used ∪ χ1) (x ↦ t1;; g) e2 in
     (t2, χ1 ∪ χ2, C1 ∪ C2)

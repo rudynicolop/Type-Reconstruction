@@ -17,4 +17,7 @@ depends: [
   "ocaml"
   "coqrecon"
   "zarith"
+  "core"
+  "menhir"
+  "ocamllex"
 ]

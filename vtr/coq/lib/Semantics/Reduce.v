@@ -13,9 +13,9 @@ Fixpoint sub (x : string) (v e : term) : term :=
   | e1 ⋅ e2 => ⟦x:=v⟧ e1 ⋅ ⟦x:=v⟧ e2
   | Bool b  => Bool b
   | Nat n   => Nat n
-  | Cond e1 e2 e3 => Cond (⟦x:=v⟧ e1) (⟦x:=v⟧ e2) (⟦x:=v⟧ e3)
-  | Op o e1 e2    => Op o (⟦x:=v⟧ e1) (⟦x:=v⟧ e2)
-  | LET y e1 e2   => LET y (⟦x:=v⟧ e1) (if equiv_dec x y then e2 else ⟦x:=v⟧ e2)
+  | Cond e1 e2 e3   => Cond (⟦x:=v⟧ e1) (⟦x:=v⟧ e2) (⟦x:=v⟧ e3)
+  | Op o e1 e2      => Op o (⟦x:=v⟧ e1) (⟦x:=v⟧ e2)
+  | LetIn y e1 e2   => LetIn y (⟦x:=v⟧ e1) (if equiv_dec x y then e2 else ⟦x:=v⟧ e2)
   end
 where "'⟦' x ':=' v '⟧' e" := (sub x v e).
 
@@ -61,7 +61,7 @@ Inductive rd : term -> term -> Prop :=
     e1 -->  e1' ->
     Op o e1 e2 -->  Op o e1' e2
 | rd_let x e1 e2 :
-    LET x e1 e2 -->  ⟦x:=e1⟧ e2
+    LetIn x e1 e2 -->  ⟦x:=e1⟧ e2
 where "e1 '-->' e2" := (rd e1 e2) : type_scope.
 
 (** Call-by-name evaluation. *)
@@ -73,7 +73,7 @@ Fixpoint eval (e : term) : option term :=
   | Cond true  e2 _ => Some e2
   | Cond false _ e3 => Some e3
   | Cond e1 e2 e3 => let! e1' := eval e1 in Cond e1' e2 e3
-  | LET x e1 e2 => Some (⟦x:=e1⟧ e2)
+  | LetIn x e1 e2 => Some (⟦x:=e1⟧ e2)
   | Op ⨥ (Nat n1)  (Nat n2)  => Some (Nat  (n1 + n2))
   | Op ⨪ (Nat n1)  (Nat n2)  => Some (Nat  (n1 - n2))
   | Op ∧ (Bool b1) (Bool b2) => Some (Bool (b1 &&  b2))
