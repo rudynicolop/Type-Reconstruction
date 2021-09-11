@@ -23,5 +23,5 @@ rule tokenize = parse
 | "<" { LT }
 | "true" { BOOL true }
 | "false" { BOOL false }
-| n as num { NAT n }
-| x as id { VAR x}
+| num as n { NAT (int_of_string n) }
+| id as x { VAR x}

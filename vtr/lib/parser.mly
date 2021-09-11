@@ -29,11 +29,11 @@ prog:
   | e=let_term EOF { e }
 
 let_term:
-  | LET x ASS e1=fun_term IN e2=let_term { LetIn(x,e1,e2) }
+  | LET x=VAR ASS e1=fun_term IN e2=let_term { LetIn(x,e1,e2) }
   | e=fun_term { e }
 
 fun_term:
-  | FUN x DOT e { Abs(x,e) }
+  | FUN x=VAR DOT e=fun_term { Abs(x,e) }
   | e=or_term { e }
 
 or_term:
@@ -47,12 +47,19 @@ and_term:
 comp_term:
   | e1=nat_term EQ e2=nat_term { Op(Eq,e1,e2) }
   | e1=nat_term LT e2=nat_term { Op(Lt,e1,e2) }
+  | e=nat_term { e }
 
 nat_term:
-  | e1=nat_term ADD e2=var_term { Op(Add,e1,e2) }
-  | e1=nat_term SUB e2=var_term { Op(Sub,e1,e2) }
+  | e1=nat_term ADD e2=app_term { Op(Add,e1,e2) }
+  | e1=nat_term SUB e2=app_term { Op(Sub,e1,e2) }
+  | e=app_term { e }
+
+app_term:
+  | e1=app_term e2=var_term { App(e1,e2) }
+  | e=var_term { e }
 
 var_term:
   | x=VAR { Var x }
   | n=NAT { Nat n }
   | b=BOOL { Bool b }
+  | LPAREN e=let_term RPAREN { e }

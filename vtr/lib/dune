@@ -4,4 +4,4 @@
 
 (library
 	(name vtr)
-	(libraries coqrecon zarith core))
+	(libraries coqrecon zarith core menhirLib))
