@@ -87,7 +87,7 @@ Section TypEq.
       constructor; intuition; subst.
     rewrite typ_eq_reflexive in Hlr.
     discriminate.
-  Qed.
+  Defined.
 
   Lemma typ_eq_not_eq : forall l r,
       typ_eq l r = false <-> l <> r.

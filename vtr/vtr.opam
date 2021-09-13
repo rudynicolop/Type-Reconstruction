@@ -13,5 +13,11 @@ install: [
   ["dune" "install"]
 ]
 depends: [
-  "coq" {build}
+  "dune"
+  "ocaml"
+  "coqrecon"
+  "zarith"
+  "core"
+  "menhir"
+  "ocamllex"
 ]

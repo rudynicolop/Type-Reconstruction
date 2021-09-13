@@ -50,7 +50,7 @@ Inductive constraint_typing (Γ : gamma)
     X1 ∩ X2 = [] ->
     Γ ⊢ e1 ∴ τ1 ⊣ X1 ≀ C1 ->
     (x ↦ τ1;; Γ) ⊢ e2 ∴ τ2 ⊣ X2 ≀ C2 ->
-    Γ ⊢ LET x e1 e2 ∴ τ2 ⊣ (X1 ∪ X2) ≀ (C1 ∪ C2)
+    Γ ⊢ LetIn x e1 e2 ∴ τ2 ⊣ (X1 ∪ X2) ≀ (C1 ∪ C2)
 where "g ⊢ e ∴ t ⊣ X ≀ C"
         := (constraint_typing g e t X C).
 

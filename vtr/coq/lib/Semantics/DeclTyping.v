@@ -43,7 +43,7 @@ Inductive typing (Γ : gamma) : term -> typ -> Prop :=
 | t_let x e1 e2 τ τ' :
     Γ ⊨ e1 ∴ τ ->
     (x ↦ τ;; Γ) ⊨ e2 ∴ τ' ->
-    Γ ⊨ LET x e1 e2 ∴ τ'
+    Γ ⊨ LetIn x e1 e2 ∴ τ'
 where "g ⊨ e ∴ t" := (typing g e t).
 
 Section Prez.
