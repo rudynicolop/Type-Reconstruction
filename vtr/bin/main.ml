@@ -2,7 +2,6 @@ open Core
 open Vtr
 
 (** Command flags. *)
-let mono_flag = "-mono"
 let eval_flag = "-eval"
 let type_flag = "-type"
 
@@ -28,6 +27,6 @@ let mono_cmd =
 let cmd =
   Command.group
     ~summary:"type-reconstruction"
-    [mono_flag, mono_cmd]
+    ["mono", mono_cmd]
 
 let () = Command.run ~version:"1.0" cmd

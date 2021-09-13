@@ -45,9 +45,12 @@ let pipeline (filename : string) (run : bool) : unit =
     |> (^) "Program has type:\n"
     |> print_endline;
     if run then
-      e
-      |> exec
-      |> ignore
+      begin
+        print_endline "Execution:";
+        e
+        |> exec
+        |> ignore
+      end
     else
       ()
   | Error msg ->
