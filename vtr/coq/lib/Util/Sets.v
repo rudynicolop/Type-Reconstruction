@@ -272,7 +272,7 @@ Section Sets.
     intros a l; destruct (member a l) eqn:Hmem; auto.
     constructor. intros H. apply In_member in H.
     rewrite H in Hmem. discriminate.
-  Qed.
+  Defined.
 
   Lemma Not_In_member_iff : forall a l,
       member a l = false <-> a ∉ l.

@@ -2,7 +2,7 @@
 	(prelude Extract)
 	(theories CoqRecon)
 	(extracted_modules
-	Datatypes Nat Bool EquivDec List
+	Datatypes Bool EquivDec List
 	Basics Specif PeanoNat Compare_dec
 	Base EqDecInst ListLib Sets Env Maybe Pair
 	Typ Term Reduce Computes Unify))
