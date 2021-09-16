@@ -1,13 +1,13 @@
 Require Export CoqRecon.Mono.Mono Coq.Arith.Compare_dec.
 
-Open Scope maybe_scope.
-
 Definition typs_of_op (o : op) : typ * typ :=
   match o with
-  | And | Or  => (TBool, TBool)
-  | Add | Sub => (TNat,  TNat)
-  | Eq  | Lt  => (TNat,  TBool)
+  | ∧ | ∨  => (TBool, TBool)
+  | ⨥ | ⨪ => (TNat,  TNat)
+  | ≅  | ⋖  => (TNat,  TBool)
   end.
+
+Open Scope maybe_scope.
 
 (** [cgen ing used g e = Some (τ, χ, C)]
     iff [cgen] is able to produce

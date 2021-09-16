@@ -45,21 +45,9 @@ Qed.
 
 Local Hint Constructors Unify : core.
 
-Fixpoint flip_constraints (C : list (typ * typ)) : list (typ * typ) :=
-  match C with
-  | []         => []
-  | (l, r) :: C => (r, l) :: flip_constraints C
-  end.
-
-Lemma flip_constraints_involutive : forall C,
-    flip_constraints (flip_constraints C) = C.
-Proof.
-  intro C; induction C as [| [l r] C IHC]; simpl; f_equal; auto.
-Qed.
-
-Lemma flip_constraints_satisfies : forall C s,
+Lemma flipper_satisfies : forall C s,
     Forall (uncurry (satisfy s)) C <->
-    Forall (uncurry (satisfy s)) (flip_constraints C).
+    Forall (uncurry (satisfy s)) (flipper C).
 Proof.
   intro C; induction C as [| [l r] C IHC];
     intros s; simpl; split; intros HC; inv HC;
@@ -67,57 +55,49 @@ Proof.
         simpl in *; symmetry; assumption.
 Qed.
 
-Lemma Ctsub_flip_constraints_comm : forall C s,
-    Ctsub s (flip_constraints C) = flip_constraints (Ctsub s C).
+Lemma Ctsub_flipper_comm : forall C s,
+    Ctsub s (flipper C) = flipper (Ctsub s C).
 Proof.
   intro C; induction C as [| [l r] C IHC]; intro s; simpl; f_equal; auto.
 Qed.
 
-Lemma flip_constraints_nil : forall C,
-    flip_constraints C = [] -> C = [].
-Proof.
-  intros C HC.
-  destruct C as [| [? ?] ?];
-    simpl in *; try discriminate; reflexivity.
-Qed.
-
 Lemma Unify_sym : forall C σ,
-    Unify C σ <-> Unify (flip_constraints C) σ.
+    Unify C σ <-> Unify (flipper C) σ.
 Proof.
   intros C s; split; intros HU.
   - induction HU; simpl; auto;
-      try (rewrite <- Ctsub_flip_constraints_comm in IHHU;
+      try (rewrite <- Ctsub_flipper_comm in IHHU;
            subst s; auto; assumption).
     intuition.
-  - remember (flip_constraints C) as fcC eqn:Heqfc;
+  - remember (flipper C) as fcC eqn:Heqfc;
       generalize dependent C.
     induction HU; intros C' Heqfc.
     + symmetry in Heqfc.
-      apply flip_constraints_nil in Heqfc; subst; auto.
+      apply flipper_nil in Heqfc; subst; auto.
     + destruct C' as [| [l' r'] C'];
         simpl in *; inv Heqfc; auto.
     + destruct C' as [| [l' r'] C'];
         simpl in *; inv Heqfc. subst s.
       apply Unify_cons_var_both_r; auto.
-      apply IHHU. apply Ctsub_flip_constraints_comm.
+      apply IHHU. apply Ctsub_flipper_comm.
     + destruct C' as [| [l' r'] C'];
         simpl in *; inv Heqfc. subst s.
       apply Unify_cons_var_both_l; auto.
-      apply IHHU. apply Ctsub_flip_constraints_comm.
+      apply IHHU. apply Ctsub_flipper_comm.
     + destruct C' as [| [l' r'] C'];
         simpl in *; inv Heqfc. subst s.
       constructor; auto.
-      apply IHHU. apply Ctsub_flip_constraints_comm.
+      apply IHHU. apply Ctsub_flipper_comm.
     + destruct C' as [| [l' r'] C'];
         simpl in *; inv Heqfc. subst s.
       constructor; auto.
-      apply IHHU. apply Ctsub_flip_constraints_comm.
+      apply IHHU. apply Ctsub_flipper_comm.
     + destruct C' as [| [l' r'] C']; inv Heqfc.
       intuition.
 Qed.
 
 Lemma unify_sym : forall C,
-    unify (flip_constraints C) = unify C.
+    unify (flipper C) = unify C.
 Proof.
   intro C.
   functional induction (unify C) using unify_ind;
@@ -132,20 +112,20 @@ Proof.
     rewrite HRL.
     destruct (lt_eq_lt_dec R L) as [[? | ?] | ?]; try lia;
       maybe_simpl;
-      try rewrite Ctsub_flip_constraints_comm, IHo; auto.
+      try rewrite Ctsub_flipper_comm, IHo; auto.
   - rewrite typ_eq_not_eq in e0. contradiction.
   - assert (HRL: R <> L) by lia.
     rewrite <- Nat.eqb_neq in HRL.
     rewrite HRL.
     destruct (lt_eq_lt_dec R L) as [[? | ?] | ?]; try lia;
       maybe_simpl;
-      try rewrite Ctsub_flip_constraints_comm, IHo; auto.
+      try rewrite Ctsub_flipper_comm, IHo; auto.
   - destruct r; simpl in *;
       try discriminate; maybe_simpl.
     + rewrite e3; reflexivity.
     + repeat dispatch_eqdec; auto; try discriminate.
   - destruct r; simpl in *; maybe_simpl;
-      try rewrite Ctsub_flip_constraints_comm;
+      try rewrite Ctsub_flipper_comm;
       try rewrite IHo; try reflexivity.
     + rewrite e3; reflexivity.
     + repeat dispatch_eqdec; try discriminate.
@@ -154,7 +134,7 @@ Proof.
     + rewrite e3; reflexivity.
     + repeat dispatch_eqdec; auto; try discriminate.
   - destruct l; simpl in *; maybe_simpl;
-      try rewrite Ctsub_flip_constraints_comm;
+      try rewrite Ctsub_flipper_comm;
       try rewrite IHo; try reflexivity.
     + rewrite e3; reflexivity.
     + repeat dispatch_eqdec; try discriminate.
@@ -228,6 +208,34 @@ Proof.
     + rewrite <- H0. assumption.
 Qed.
 
+(* Local Hint Resolve tsub_order_reflexive : core. *)
+(* Local Hint Resolve tsub_order_transitive : core. *)
+
+Local Hint Resolve Unify_satisfies : core.
+Local Hint Resolve tsub_order_empty_top : core.
+
+Lemma Unify_principal_unifier : forall C σ,
+    Unify C σ -> principal_unifier σ C.
+Proof.
+  unfold principal_unifier.
+  intros C s HU. split; auto.
+  induction HU; intros s' HC; inv HC; auto;
+    try (rename H2 into HLR; rename H3 into HC).
+  - unfold "⊑".
+    (* apply satisfy_constraints_compose with (γ := s) in HC.
+    unfold "⊑". rewrite <- tenv_compose_Ctsub in HC. *)
+    unfold uncurry, satisfy, "†" in HLR.
+Abort.
+
+Theorem Unify_principal : forall C δ,
+    Forall (uncurry (satisfy δ)) C ->
+    exists σ, Unify C σ /\ σ ⊑ δ.
+Proof.
+  (*
+  intro C; induction C as [| [l r] C IHC];
+    intros d H; inv H; eauto. *)
+Abort.
+    
 Local Hint Resolve Unify_unify : core.
 Local Hint Resolve unify_Unify : core.
 
@@ -236,8 +244,6 @@ Theorem Unify_unify_iff : forall C σ,
 Proof.
   intuition.
 Qed.
-
-Local Hint Resolve Unify_satisfies : core.
 
 Theorem unify_satisfies : forall C σ,
     unify C = Some σ ->

@@ -1,4 +1,5 @@
-Require Export CoqRecon.Syntax.Term CoqRecon.Util.EqDecInst.
+Require Export CoqRecon.Syntax.Term CoqRecon.Util.EqDecInst
+        CoqRecon.Semantics.TypEnv.
 
 Open Scope op_scope.
 

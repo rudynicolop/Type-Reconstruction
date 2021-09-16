@@ -1,5 +1,5 @@
 Set Warnings "-unused-pattern-matching-variable".
-Require Export CoqRecon.Util.EqDecInst CoqRecon.Syntax.Typ Coq.funind.Recdef.
+Require Export CoqRecon.Util.EqDecInst CoqRecon.Semantics.TypEnv Coq.funind.Recdef.
 Require Import CoqRecon.Util.Pair.
 
 Open Scope maybe_scope.

@@ -339,3 +339,23 @@ Section Uniques.
     rewrite app_length. lia.
   Qed.
 End Uniques.
+
+Fixpoint flipper {A B : Set} (C : list (A * B)) : list (B * A) :=
+  match C with
+  | []         => []
+  | (l, r) :: C => (r, l) :: flipper C
+  end.
+
+Lemma flipper_involutive : forall (A B : Set) (C : list (A * B)),
+    flipper (flipper C) = C.
+Proof.
+  intros A B C; induction C as [| [l r] C IHC]; simpl; f_equal; auto.
+Qed.
+
+Lemma flipper_nil : forall (A B : Set) (C : list (A * B)),
+    flipper C = [] -> C = [].
+Proof.
+  intros A B C HC.
+  destruct C as [| [? ?] ?];
+    simpl in *; try discriminate; reflexivity.
+Qed.

@@ -26,6 +26,7 @@ Require CoqRecon.Util.Base
         CoqRecon.Util.Sets CoqRecon.Util.Env
         CoqRecon.Util.Maybe CoqRecon.Util.Pair
         CoqRecon.Syntax.Typ CoqRecon.Syntax.Term
+        CoqRecon.Semantics.TypEnv
         CoqRecon.Semantics.Reduce
         CoqRecon.Mono.Computes
         CoqRecon.Unify.Unify.
@@ -35,6 +36,7 @@ Separate Extraction CoqRecon.Util.Base
          CoqRecon.Util.Sets CoqRecon.Util.Env
          CoqRecon.Util.Maybe CoqRecon.Util.Pair
          CoqRecon.Syntax.Typ CoqRecon.Syntax.Term
+         CoqRecon.Semantics.TypEnv
          CoqRecon.Semantics.Reduce
          CoqRecon.Mono.Computes
          CoqRecon.Unify.Unify.

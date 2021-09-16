@@ -1,4 +1,5 @@
-Require Export CoqRecon.Syntax.Term CoqRecon.Util.EqDecInst.
+Require Export CoqRecon.Syntax.Term
+        CoqRecon.Util.EqDecInst CoqRecon.Util.Maybe.
 
 Reserved Notation "'⟦' x ':=' v '⟧' e"
          (at level 20, right associativity).

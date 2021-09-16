@@ -5,7 +5,7 @@
 	Datatypes Bool EquivDec List
 	Basics Specif PeanoNat Compare_dec
 	Base EqDecInst ListLib Sets Env Maybe Pair
-	Typ Term Reduce Computes Unify))
+	Typ Term TypEnv Reduce Computes Unify))
 (library
 	(name coqrecon)
 	(public_name coqrecon)

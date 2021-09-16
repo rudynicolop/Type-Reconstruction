@@ -64,9 +64,9 @@ Section Sub.
   Hint Rewrite (@bind_same string typ) : core.
 
   Lemma weakening : forall g e t,
-      g ⊨ e ∴ t -> forall g', incl g g' -> g' ⊨ e ∴ t.
+      g ⊨ e ∴ t -> forall g', inclu g g' -> g' ⊨ e ∴ t.
   Proof.
-    unfold incl, bound;
+    unfold inclu, bound;
       intros g e t Hget; induction Hget;
         intros g' HI; unfold bound in *;
           simpl in *; eauto.

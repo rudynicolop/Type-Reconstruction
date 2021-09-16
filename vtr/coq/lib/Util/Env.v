@@ -14,15 +14,18 @@ Section Env.
   Definition bind (k : K) (v : V) (e : env) : env :=
     fun k' => if equiv_dec k' k then Some v else e k'.
 
+  Definition blind (k : K) (e : env) : env :=
+    fun k' => if equiv_dec k' k then None else e k'.
+  
   Lemma bind_sound : forall k v e,
-      (bind k v e) k = Some v.
+      bind k v e k = Some v.
   Proof.
     intros k v e; unfold bind.
     dispatch_eqdec; reflexivity.
   Qed.
 
   Lemma bind_complete : forall k' k v e,
-      k' <> k -> (bind k v e) k' = e k'.
+      k' <> k -> bind k v e k' = e k'.
   Proof.
     intros k' k v e Hk'k; unfold bind.
     dispatch_eqdec; reflexivity.
@@ -45,7 +48,59 @@ Section Env.
     repeat dispatch_eqdec; auto.
   Qed.
 
-  Definition find (k : K) (e : env) : option V := e k.
+  Lemma blind_sound : forall k e, blind k e k = None.
+  Proof.
+    unfold blind; intros k e.
+    dispatch_eqdec; auto.
+  Qed.
+
+  Lemma blind_complete : forall k' k e,
+      k' <> k -> blind k e k' = e k'.
+  Proof.
+    unfold blind; intros k' k e Hk'k.
+    dispatch_eqdec; auto.
+  Qed.
+
+  Lemma blind_comm : forall x y e,
+      blind x (blind y e) = blind y (blind x e).
+  Proof.
+    unfold blind; intros x y e.
+    extensionality k.
+    repeat dispatch_eqdec; auto.
+  Qed.
+
+  Lemma blind_idempotent : forall k e,
+      blind k (blind k e) = blind k e.
+  Proof.
+    unfold blind; intros k e.
+    extensionality x.
+    repeat dispatch_eqdec; auto.
+  Qed.
+
+  Lemma blind_bind_same : forall k v e,
+      blind k (bind k v e) = blind k e.
+  Proof.
+    unfold blind, bind; intros k v e.
+    extensionality k'.
+    repeat dispatch_eqdec; auto.
+  Qed.
+
+  Lemma bind_blind_same : forall k v e,
+      bind k v (blind k e) = bind k v e.
+  Proof.
+    unfold blind, bind; intros k v e.
+    extensionality k'.
+    repeat dispatch_eqdec; auto.
+  Qed.
+
+  Lemma bind_blind_diff : forall x y v e,
+      x <> y ->
+      bind x v (blind y e) = blind y (bind x v e).
+  Proof.
+    unfold blind, bind; intros x y v e Hxy.
+    extensionality k.
+    repeat dispatch_eqdec; auto.
+  Qed.
 
   Definition bound (k : K) (v : V) (e : env) : Prop := e k = Some v.
 
@@ -94,7 +149,7 @@ Section Env.
   Definition range (e : env) (r : list V) : Prop :=
     forall v, In v r <-> exists k, e k = Some v.
 
-  Definition incl (e1 e2 : env) : Prop :=
+  Definition inclu (e1 e2 : env) : Prop :=
     forall k v, bound k v e1 -> bound k v e2.
 End Env.
 
