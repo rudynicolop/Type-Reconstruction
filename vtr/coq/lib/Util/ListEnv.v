@@ -34,9 +34,9 @@ Notation "l ⩰ e"
   := (env_eq l e)
        (at level 70, no associativity) : type_scope.
 
-Notation "'[[' ks ⟼  vs ']]'"
+Notation "'~[' ks ⟼  vs ']~'"
   := (combine_to_env ks vs)
-       (at level 10, no associativity) : env_scope.
+       (at level 4, no associativity) : env_scope.
 
 Section Env.
   Context {K V : Set} {HDK : EqDec K eq}.
@@ -104,4 +104,56 @@ Section Env.
       intro y; specialize Heql with y.
       repeat dispatch_eqdec; auto.
   Abort.
+
+  Lemma combine_to_env_lookup : forall ks (vs : list V) k,
+      ~[ ks ⟼  vs ]~ k = lookup k (combine ks vs).
+  Proof.
+    intros ks vs k. unfold combine_to_env.
+    symmetry. apply to_env_sound.
+  Qed.
+
+  Lemma lookup_in : forall l (k : K) (v : V),
+      lookup k l = Some v -> In (k,v) l.
+  Proof.
+    intro l; induction l as [| [k' v'] l IHl];
+      intros k v; simpl; intros H;
+        try discriminate; dispatch_eqdec; firstorder; inv H; auto.
+  Qed.
+  
+  Lemma in_lookup_nodup : forall l (k : K) (v : V),
+      NoDup (map fst l) -> In (k, v) l -> lookup k l = Some v.
+  Proof.
+    intro l; induction l as [| [k' v'] l IHl];
+      intros k v Hnd Hin; simpl in *; inv Hnd; try contradiction.
+    dispatch_eqdec; destruct Hin as [Hin | Hin];
+      try inv Hin; auto; try contradiction. exfalso.
+    destruct (combine_ex l) as (ks & vs & Hcmb & Hlen); subst.
+    apply in_combine_l in Hin.
+    rewrite combine_map_fst in H1.
+    rewrite <- Hlen in H1.
+    rewrite Min.min_idempotent in H1.
+    rewrite firstn_all in H1.
+    contradiction.
+  Qed.
+
+  Lemma combine_to_env_some : forall ks vs (k : K) (v : V),
+      ~[ ks ⟼  vs ]~ k = Some v ->
+      exists ks1 ks2 vs1 vs2,
+        combine ks vs = combine ks1 vs1 ++ (k,v) :: combine ks2 vs2
+        /\ ~ In k ks1.
+  Proof.
+    intros ks vs k v.
+    rewrite combine_to_env_lookup.
+    generalize dependent v;
+      generalize dependent k;
+      generalize dependent vs.
+    induction ks as [| k ks IHks];
+      intros [| v vs] kk vv Hkv; simpl in *; try discriminate.
+    dispatch_eqdec.
+    - inv Hkv.
+      exists [], ks, [], vs; intuition.
+    - apply IHks in Hkv as (ks1 & ks2 & vs1 & vs2 & Hcmb & Hks1).
+      exists (k :: ks1), ks2, (v :: vs1), vs2.
+      rewrite Hcmb. firstorder.
+  Qed.
 End Env.

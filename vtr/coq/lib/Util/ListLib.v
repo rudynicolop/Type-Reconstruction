@@ -340,6 +340,71 @@ Section Uniques.
   Qed.
 End Uniques.
 
+Section Inside.
+  Context {A : Set}.
+  
+  Inductive inside (a : A) : list A -> Prop :=
+  | inside_cons_hd t :
+      inside a (a :: t)
+  | inside_cons_tl h t :
+      h <> a ->
+      inside a t ->
+      inside a (h :: t).
+
+  Lemma inside_sound : forall a l, inside a l -> In a l.
+  Proof.
+    intros a l H; induction H; intuition.
+  Qed.
+    
+  Lemma inside_split_first : forall a l,
+      inside a l -> exists l1 l2, l = l1 ++ a :: l2 /\ ~ inside a l1.
+  Proof.
+    intros a l H; induction H.
+    - exists [], t. split; auto.
+      intros H; inv H.
+    - destruct IHinside as (l1 & l2 & Ht & Hl1); subst.
+      exists (h :: l1), l2. split; auto.
+      intros Hin; inv Hin; contradiction.
+  Qed.
+
+  Hypothesis Hexm_eq : forall a1 a2 : A, a1 = a2 \/ a1 <> a2.
+
+  Local Hint Constructors inside : core.
+
+  Lemma inside_complete : forall l a, In a l -> inside a l.
+  Proof.
+    intro l; induction l as [| h t IHt];
+      intros a Hal; simpl in *; try contradiction.
+    destruct (Hexm_eq h a) as [Hha | Hha];
+      firstorder subst; auto.
+  Qed.
+
+  Local Hint Resolve inside_sound : core.
+  Local Hint Resolve inside_complete : core.
+
+  Lemma inside_in_iff : forall a l,
+      inside a l <-> In a l.
+  Proof.
+    intuition.
+  Qed.
+
+  Lemma inside_in_not_iff : forall a l,
+      ~ inside a l <-> ~ In a l.
+  Proof.
+    intuition.
+  Qed.
+  
+  Lemma in_split_first : forall (a : A) l,
+      In a l -> exists l1 l2, l = l1 ++ a :: l2 /\ ~ In a l1.
+  Proof.
+    intros a l HIn.
+    apply inside_complete in HIn.
+    apply inside_split_first in HIn
+      as (l1 & l2 & Hl & Hl1); subst.
+    exists l1, l2; auto.
+  Qed.
+End Inside.
+
 Fixpoint flipper {A B : Set} (C : list (A * B)) : list (B * A) :=
   match C with
   | []         => []
@@ -359,3 +424,49 @@ Proof.
   destruct C as [| [? ?] ?];
     simpl in *; try discriminate; reflexivity.
 Qed.
+
+Section PairLists.
+  Context {U V : Set}.
+
+  Lemma combine_map_fst : forall (us : list U) (vs : list V),
+      map fst (combine us vs) = firstn (min (length us) (length vs)) us.
+  Proof.
+    intro us; induction us as [| u us IHus];
+      intros [| v vs]; simpl; f_equal; auto.
+  Qed.
+
+  Lemma combine_map_snd : forall (vs : list V) (us : list U),
+      map snd (combine us vs) = firstn (min (length us) (length vs)) vs.
+  Proof.
+    intro vs; induction vs as [| v vs IHvs];
+    intros [| u us]; simpl; f_equal; auto.
+  Qed.
+
+  Lemma split_map : forall (l : list (U * V)),
+      split l = (map fst l, map snd l).
+  Proof.
+    intro l; induction l as [| [u v] t IHt]; simpl; auto.
+    destruct (split t) as [us vs] eqn:Hsplit; simpl; inv IHt; auto.
+  Qed.
+
+  Lemma combine_map : forall (l : list (U * V)),
+      combine (map fst l) (map snd l) = l.
+  Proof.
+    intros l.
+    pose proof split_combine l as H.
+    destruct (split l) as [us vs] eqn:Hsplit.
+    rewrite split_map in Hsplit.
+    injection Hsplit as Hus Hvs.
+    rewrite Hus, Hvs; assumption.
+  Qed.
+    
+  Hint Rewrite map_length : core.
+  Local Hint Resolve combine_map : core.
+           
+  Lemma combine_ex : forall (l : list (U * V)),
+      exists us vs, l = combine us vs /\ length us = length vs.
+  Proof.
+    intro l. exists (map fst l). exists (map snd l).
+    autorewrite with core; auto.
+  Qed.
+End PairLists.
