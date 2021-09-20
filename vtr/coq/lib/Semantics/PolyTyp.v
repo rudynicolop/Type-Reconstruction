@@ -26,128 +26,70 @@ Definition pnv (t : typ) : poly :=
 
 Coercion pnv : typ >-> poly.
 
-(*
-Reserved Notation "p1 ≂ p2" (at level 70, no associativity).
+Reserved Notation "C ⊩ t1 ≂ t2" (at level 70, no associativity).
 
-Inductive alpha : poly -> poly -> Prop :=
-| alpha_nil (t : typ) :
-  t ≂ t
-| alpha_cons X Y XS YS x y :
-  (∀ XS, x) ≂ (∀ YS, (Y ↦ TVar X;; ∅) † y) ->
-  (∀ (X :: XS), x) ≂ (∀ (Y :: YS), y)
-where "p1 ≂ p2" := (alpha p1 p2) : type_scope.
-  
+Inductive alpha (C : list (nat * nat)) : typ -> typ -> Prop :=
+| alpha_nat :
+    C ⊩ TNat ≂ TNat
+| alpha_bool :
+    C ⊩ TBool ≂ TBool
+| alpha_arrow τ1 τ2 ρ1 ρ2 :
+    C ⊩ τ1 ≂ ρ1 ->
+    C ⊩ τ2 ≂ ρ2 ->
+    C ⊩ τ1 → τ2 ≂ ρ1 → ρ2
+| alpha_var (X Y : nat) :
+    X = Y \/ In (X, Y) C ->
+    C ⊩ X ≂ Y
+where "C ⊩ t1 ≂ t2" := (alpha C t1 t2) : type_scope.
+
 Section Alpha.
   Local Hint Unfold Reflexive : core.
   Local Hint Constructors alpha : core.
-
-  Lemma tsub_same_tvar : forall t T,
-      (T ↦ TVar T;; ∅) † t = t.
-  Proof.
-    intro t;
-      induction t as [| | t1 IHt1 t2 IHt2 | T];
-      intro X; simpl in *; auto.
-    - rewrite IHt1, IHt2; reflexivity.
-    - unfold bind; dispatch_eqdec; reflexivity.
-  Qed.
-
-  Hint Rewrite tsub_same_tvar : core.
   
-  Lemma alpha_reflexive : Reflexive alpha.
+  Lemma alpha_reflexive : forall C, Reflexive (alpha C).
   Proof.
-    autounfold with *; intros [XS x].
-    generalize dependent x.
-    induction XS as [| X XS IHXS]; intro x; auto.
-    constructor; autorewrite with core; auto.
-  Qed.
-
-  Local Hint Unfold Symmetric : core.
-  
-  Lemma alpha_symmetric : Symmetric alpha.
-  Proof.
-    autounfold with *; intros [XS x] [YS y] H.
-    induction H as [t | U V US VS u v Huv IH]; auto.
-    inv Huv; inv IH.
-    - constructor.
-
-Definition alpha
-           '(∀ XS, x : poly)
-           '(∀ YS, y : poly) : Prop :=
-  forall t,
-    ~[ XS ⟼  repeat t (length XS) ]~ † x =
-    ~[ YS ⟼  repeat t (length YS) ]~ † y.
-
-Definition alpha_ex
-           '(∀ XS, x : poly)
-           '(∀ YS, y : poly) : Prop :=
-  exists t,
-    ~[ XS ⟼  repeat t (length XS) ]~ † x =
-    ~[ YS ⟼  repeat t (length YS) ]~ † y.
-
-Section Alpha.
-  Local Hint Unfold alpha : core.
-  Local Hint Unfold Reflexive : core.
-
-  Lemma alpha_reflexive : Reflexive alpha.
-  Proof.
-    autounfold with *; intros [XS x]; intuition.
+    autounfold with *; intros C t;
+      induction t as [| | t1 IHt1 t2 IHt2 | T]; auto.
   Qed.
 
   Local Hint Unfold Symmetric : core.
 
-  Lemma alpha_symmetric : Symmetric alpha.
+  (*Lemma alpha_symmetric : forall C, Symmetric (alpha C).
   Proof.
-    autounfold with *; intros [XS x] [YS y]; intuition.
-  Qed.
-
-  Local Hint Unfold Transitive : core.
-
-  Lemma alpha_transitive : Transitive alpha.
-  Proof.
-    autounfold with *; intros [XS x] [YS y] [ZS z];
-      etransitivity; eauto.
-  Qed.
-
-  Local Hint Unfold alpha_ex : core.
+    autounfold with *; intros C x y Hxy;
+      induction Hxy; intuition.
+  Qed.*)
   
-  Lemma alpha_alpha_ex : forall p q,
-      alpha p q -> alpha_ex p q.
+  Local Hint Resolve in_flipper : core.
+  
+  Lemma alpha_symmetric_flip : forall C x y,
+      C ⊩ x ≂ y -> flipper C ⊩ y ≂ x.
   Proof.
-    autounfold with *; intros [XS x] [YS y] H.
-    specialize H with 0; eauto.
+    intros C x y Hxy; induction Hxy; intuition.
   Qed.
 
-  Lemma alpha_ex_alpha : forall p q,
-      alpha_ex p q -> alpha p q.
+  Lemma alpha_transitive : forall XS YS x y,
+      combine XS YS ⊩ x ≂ y ->
+      forall ZS z,
+        combine YS ZS ⊩ y ≂ z ->
+        combine XS ZS ⊩ x ≂ z.
   Proof.
-    autounfold with *; intros [XS x] [YS y].
-    generalize dependent YS;
-      generalize dependent XS;
-      generalize dependent y.
-    induction x as [| | x1 IHx1 x2 IHx2 | X];
-      intros [| | y1 y2 | Y] XS YS [w Hw] t; simpl in *;
-        try discriminate; auto.
-    generalize dependent τ;
-      generalize dependent YS;
-      generalize dependent XS;
-      generalize dependent y.
-    induction x as [| | x1 IHx1 x2 IHx2 | X];
-      intros [| | y1 y2 | Y] XS YS τ H t; simpl in *;
-        try discriminate; auto.
-    - 
-      generalize dependent Y;
-        generalize dependent t;
-        generalize dependent τ;
-        generalize dependent YS.
-      induction XS
+    intros XS YS x y Hxy; induction Hxy;
+      intros ZS z Hyz; inv Hyz; auto.
+    rename Y0 into Z.
+    constructor.
+    intuition; subst; auto.
+    - right. admit.
+    - right. admit.
+    - right.
+      apply in_combine_nth_error in H0 as (n & HXS  & HYS).
+      apply in_combine_nth_error in H  as (m & HYS' & HZS).
+      enough (Hndy: NoDup YS).
+      pose proof nodup_nth_error _ _ Hndy _ _ _ HYS HYS'; subst.
+      eauto using in_combine_index. admit.
+  Abort.
 End Alpha.
 
-Definition typs_of_tvars : list nat -> list typ := map TVar.
-
-Coercion typs_of_tvars : (list nat) >-> (list typ).
-*)
-
-(*
 Definition binds_only_tvar (s : tenv) : Prop :=
   forall X t, s X = Some t -> exists Y, t = TVar Y.
 
@@ -161,11 +103,15 @@ Proof.
   unfold bind in H.
   dispatch_eqdec; inv H; eauto.
 Qed.
-
+(*
 Definition alpha
            '(∀ XS, x : poly)
            '(∀ YS, y : poly) : Prop :=
-  x = ~[ YS ⟼  map TVar XS ]~ † y.
+  x = ~[ uniques YS ⟼  map TVar (uniques XS) ]~ † y.
+
+Notation "p1 ≂ p2"
+  := (alpha p1 p2)
+       (at level 70, no associativity) : type_scope.
 
 Section Alpha.
   Lemma tvars_sub_tvar_same : forall TS T,
@@ -196,89 +142,74 @@ Section Alpha.
     autounfold with core; intros [XS x]; auto.
   Qed.
 
-  Lemma tenv_tvars_involutive : forall XS YS,
-      ~[ XS ⟼ map TVar YS ]~ ‡ ~[ YS ⟼ map TVar XS ]~ =
-      match length XS with
-      | O => ∅
-      | S _ => fun T => Some (TVar T)
-      end.
-  Proof.
-    intro XS; induction XS as [| X XS IHXS];
-      intros [| Y YS]; extensionality T; cbn;
-        unfold "∅"; auto.
-    - specialize IHXS with []; cbn in IHXS.
-      Locate "~[ _ ⟼  _ ]~".
-      unfold combine_to_env in IHXS.
-      Search (combine _ []).
-      rewrite combine_nil in IHXS; simpl in IHXS.
-      (*
-    specialize IHXS with YS.
-    apply equal_f with (x := T) in IHXS.
-    unfold "‡", "∅", bind in *.
-    repeat dispatch_eqdec.
-*)
-  Abort.
-
   Lemma tvars_tsub_tvar_involutive : forall XS YS T,
-      ~[ XS ⟼  map TVar YS ]~
-       † match ~[ YS ⟼  map TVar XS ]~ T with
+      NoDup XS -> NoDup YS ->
+      ~[XS ⟼  map TVar YS]~
+       † match ~[YS ⟼  map TVar XS]~ T with
          | Some τ => τ
          | None => T
          end = T.
   Proof.
-    intros XS YS T.
-    destruct (~[YS ⟼  map TVar XS ]~ T) as [t |] eqn:Heqt;
+    intros XS YS T Hndx Hndy.
+    destruct (~[YS ⟼  map TVar XS]~ T)
+      as [t |] eqn:Heqt;
       try apply combine_binds_only_tvar in Heqt as HOT;
       try destruct HOT as [Z HZ]; subst; simpl.
-    - destruct (~[ XS ⟼  map TVar YS ]~ Z) as [t |] eqn:Heqt';
+    - destruct (~[XS ⟼  map TVar YS]~ Z)
+        as [t |] eqn:Heqt';
         try apply combine_binds_only_tvar in Heqt' as HOT;
         try destruct HOT as [W HW]; subst; simpl.
-      + admit.
-      + admit.
-    - destruct (~[ XS ⟼  map TVar YS ]~ T) as [t |] eqn:Heqt';
+      + rewrite combine_to_env_lookup in Heqt.
+        rewrite combine_to_env_lookup in Heqt'.
+        apply lookup_in in Heqt  as HT.
+        apply lookup_in in Heqt' as HZ.
+        rewrite combine_map_r in HT, HZ.
+        rewrite in_map_iff in HT, HZ.
+        destruct HT as ((x1 & x2) & H1 & HYX);
+          destruct HZ as ((x3 & x4) & H2 & HXY);
+          inv H1; inv H2.
+        apply in_combine_flip in HYX.
+        eauto using NoDup_pair_eq_r.
+      + exfalso.
+        rewrite combine_to_env_lookup in Heqt, Heqt'.
+        apply lookup_in in Heqt as HT.
+        apply lookup_not_in with (v:=TVar T) in Heqt' as HZ.
+        rewrite combine_map_r in HT, HZ.
+        rewrite in_map_iff in HT, HZ.
+        destruct HT as ((x1 & x2) & Huv & HYXS); inv Huv.
+        apply in_combine_flip in HYXS. firstorder.
+    - destruct (~[XS ⟼  map TVar YS]~ T)
+        as [t |] eqn:Heqt';
         try apply combine_binds_only_tvar in Heqt' as HOT;
         try destruct HOT as [W HW]; subst; simpl; auto.
-*)
+      (* apply combine_to_env_some in Heqt'
+        as (XS1 & XS2 & YS1 & YS2 & HC & HTXS1). *)
+      rewrite combine_to_env_lookup in Heqt, Heqt'.
+      pose proof lookup_not_in _ _ Heqt T as HT.
+      apply lookup_in in Heqt' as HW.
+      rewrite combine_map_r in HT, HW.
+      rewrite in_map_iff in HT, HW.
+      destruct HW as ((x1 & x2) & Huv & HYXS); inv Huv.
+      apply nexists_forall_not with (x:=(T, T)) in HT.
+      apply Decidable.not_and in HT; firstorder.
+      apply not_in_combine in H.
+      apply in_combine_nth_error in HYXS as (n & HXS & HYS).
+      apply nth_error_In in HXS as HXSin;
+        apply nth_error_In in HYS as HYSin.
+      destruct H as [Htyxs | [Htyxs | [Htyxs | Hmn]]];
+        try destruct Htyxs as [Htxs Htys];
+        try destruct Hmn as (p & q & Hpq & Hp & Hq);
+        try contradiction.
+      +
+  Abort.
       
-(*
   Lemma tvars_tsub_involutive : forall t XS YS,
       ~[ XS ⟼ map TVar YS ]~ † ~[ YS ⟼ map TVar XS ]~ † t = t.
   Proof.
     intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
       intros XS YS; simpl; auto.
     - rewrite IHt1, IHt2; reflexivity.
-    - generalize dependent T;
-        generalize dependent YS.
-      induction XS as [| X XS IHXS];
-        intros [| Y YS] T; cbn; auto.
-      unfold bind at 2; dispatch_eqdec; auto.
-      + unfold bind; dispatch_eqdec; auto.
-      + specialize IHXS with YS T.
-        destruct (~[YS ⟼  map TVar XS]~ T)
-          as [t' |] eqn:Heqt';
-          try apply combine_binds_only_tvar in Heqt' as HOT;
-          unfold combine_to_env in *; rewrite Heqt'; simpl in *.
-        * destruct HOT as [Z HZ]; subst; simpl in *.
-          unfold bind; dispatch_eqdec; auto.
-          destruct (to_env (combine XS (map TVar YS)) X)
-            as [t'' |] eqn:Heqt'';
-            try apply combine_binds_only_tvar in Heqt'' as HOT.
-          -- destruct HOT as [Z HZ]; subst; inv IHXS.
-             (* no apparent contradiction here. *)
-             admit.
-          -- inv IHXS. exfalso.
-             (* there is some contradiction here *)
-             admit.
-        * simpl; unfold bind.
-          dispatch_eqdec; auto.
-          destruct (to_env (combine XS (map TVar YS)) X)
-            as [t'' |] eqn:Heqt'';
-            try apply combine_binds_only_tvar in Heqt'' as HOT.
-          -- destruct HOT as [Z HZ]; subst; inv IHXS.
-             (* there is some type of contradiction here. *)
-             exfalso. admit.
-          -- exfalso. admit.
-             (* no apparent contradiction here...*)
+    -
   Abort.
   
   Local Hint Unfold Symmetric : core.
@@ -287,125 +218,9 @@ Section Alpha.
   Proof.
     autounfold with *; intros [XS x] [YS y] H.
     rewrite H.
-End Alpha.
-
-(** Alpha equivalence of [poly] *)
-Definition alpha (p1 p2 : poly) : Prop :=
-  satisfy ~[ pvars p1 ⟼  map TVar (pvars p2) ]~ (ptyp p1) (ptyp p2).
-
-Notation "p1 ≂ p2"
-  := (alpha p1 p2)
-       (at level 70, no associativity) : type_scope.
-
-Section Alpha.
-  Local Hint Resolve satisfy_reflexive : core.
-
-  Lemma alpha_reflexive : Reflexive alpha.
-  Proof.
-    intuition.
-  Qed.
-
-  Local Hint Resolve satisfy_symmetric : core.
-  Local Hint Unfold alpha : core.
-  Local Hint Unfold Symmetric : core.
-
-  Lemma satisfy_swap_bind : forall x y X Y s w,
-      binds_only_tvar s -> binds_only_tvar w ->
-      (satisfy s x y -> satisfy w x y) ->
-      satisfy (X ↦ TVar Y;; s) x y ->
-      satisfy (Y ↦ TVar X;; w) x y.
-  Proof.
-    unfold satisfy.
-    intro x; induction x as [| | x1 IHx1 x2 IHx2 | X'];
-      intros [| | y1 y2 | Y'] X Y s w Hs Hw Hsw Hbind;
-      simpl in *; auto; try discriminate.
-    - unfold bind in *.
-      repeat dispatch_eqdec; auto; try discriminate.
-      clear Hsw. unfold binds_only_tvar in Hs.
-      destruct (s Y) as [t |] eqn:HsY; subst; try discriminate.
-      apply Hs in HsY as (Z & HZ). discriminate.
-    - unfold bind in *.
-      repeat dispatch_eqdec; auto; try discriminate.
-      clear Hsw. unfold binds_only_tvar in Hs.
-      destruct (s Y) as [t |] eqn:HsY; subst; try discriminate.
-      apply Hs in HsY as (Z & HZ). discriminate.
-    - (* injection Hsw as Hsw1 Hsw2. *)
-      injection Hbind as Hb1 Hb2.
-      admit. (* I know what I have to do,
-                I don't know if I have the
-                strength to do it :(. *)
-    - exfalso. clear Hsw.
-      unfold bind at 3 in Hbind.
-      dispatch_eqdec; try discriminate.
-      unfold binds_only_tvar in Hs.
-      destruct (s Y') as [t |] eqn:HsY; subst; try discriminate.
-      apply Hs in HsY as (Z & HZ). discriminate.
-    - exfalso. clear Hsw.
-      unfold bind in Hbind.
-      dispatch_eqdec; try discriminate.
-      unfold binds_only_tvar in Hs.
-      destruct (s X') as [t |] eqn:HsX; subst; try discriminate.
-      apply Hs in HsX as (Z & HZ). discriminate.
-    - exfalso. clear Hsw.
-      unfold bind in Hbind.
-      dispatch_eqdec; try discriminate.
-      unfold binds_only_tvar in Hs.
-      destruct (s X') as [t |] eqn:HsX; subst; try discriminate.
-      apply Hs in HsX as (Z & HZ). discriminate.
-    - exfalso. clear Hsw.
-      unfold bind in Hbind.
-      dispatch_eqdec; try discriminate.
-      unfold binds_only_tvar in Hs.
-      destruct (s X') as [t |] eqn:HsX; subst; try discriminate.
-      apply Hs in HsX as (Z & HZ). discriminate.
-    - unfold bind in *.
-      repeat dispatch_eqdec; auto.
-      + unfold binds_only_tvar in *.
-        destruct (s Y') as [t |] eqn:HsY;
-          try (inv Hbind; contradiction).
-        apply Hs in HsY as (Z & HZ); subst. inv Hbind.
-        destruct (s Z) as [u |] eqn:Hsu;
-          try apply Hs in Hsu as [U HU];
-          destruct (w Z) as [v |] eqn:Hwv;
-          try apply Hw in Hwv as [V HV];
-          destruct (w Y') as [q |] eqn:Hwq;
-          try apply Hw in Hwq as (Q & HQ); subst; auto.
-  Abort.
-  
-  Lemma satisfy_flipped_vars : forall XS YS x y,
-      satisfy ~[XS ⟼ map TVar YS]~ x y ->
-      satisfy ~[YS ⟼ map TVar XS]~ x y.
-  Proof.
-    unfold combine_to_env, satisfy.
-    intro XS; induction XS as [| X XS IHXS];
-      intros [| Y YS] x y H; simpl in *; auto.
-    generalize dependent Y;
-      generalize dependent X;
-      generalize dependent y.
-    induction x as [| | x1 IHx1 x2 IHx2 | X'];
-      intros [| | y1 y2 | Y'] X Y Hxy;
-      simpl in *; auto; try discriminate.
-    - exfalso; unfold bind in *.
-  Abort.
-  
-  Lemma alpha_symmetric : Symmetric alpha.
-  Proof.
-    autounfold with core.
-    intros [XS x] [YS y] Hxy; simpl in *.
-    apply satisfy_symmetric.
-  Abort.
-
-  Local Hint Resolve satisfy_transitive : core.
-  Local Hint Unfold Transitive : core.
-  
-  Lemma alpha_transitive : Transitive alpha.
-  Proof.
-    autounfold with core.
-    intros [XS x] [YS y] [ZS z] Hxy Hyz; simpl in *.
   Abort.
 End Alpha.
 *)
-
 Reserved Notation "g ⫢ e ∴ p"
          (at level 70, no associativity).
 

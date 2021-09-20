@@ -425,6 +425,14 @@ Proof.
     simpl in *; try discriminate; reflexivity.
 Qed.
 
+Lemma in_flipper : forall (A B : Set) l (a : A) (b : B),
+    In (a, b) l -> In (b, a) (flipper l).
+Proof.
+  intros A B l; induction l as [| [u v] l IHl];
+    intros a b Hin; simpl in *; auto.
+  destruct Hin as [Hab | Hab]; try inv Hab; auto.
+Qed.
+
 Section PairLists.
   Context {U V : Set}.
 
@@ -459,7 +467,7 @@ Section PairLists.
     injection Hsplit as Hus Hvs.
     rewrite Hus, Hvs; assumption.
   Qed.
-    
+  
   Hint Rewrite map_length : core.
   Local Hint Resolve combine_map : core.
            
@@ -469,4 +477,155 @@ Section PairLists.
     intro l. exists (map fst l). exists (map snd l).
     autorewrite with core; auto.
   Qed.
+
+  Lemma flipper_combine : forall (us : list U) (vs : list V),
+      flipper (combine us vs) = combine vs us.
+  Proof.
+    intro us; induction us as [| u us IHus];
+      intros [| v vs]; simpl; f_equal; auto.
+  Qed.
+
+  Local Hint Constructors NoDup : core.
+  
+  Lemma NoDup_combine : forall (us : list U),
+      NoDup us ->
+      forall (vs : list V),
+        NoDup (combine us vs).
+  Proof.
+    intros us Hndu; induction Hndu;
+      intros [| v vs]; simpl; auto.
+    assert (~ In (x, v) (combine l vs)).
+    { intros Hin.
+      apply in_combine_l in Hin as ?; contradiction. }
+    auto.
+  Qed.
+
+  Lemma NoDup_pair_eq_r : forall us,
+      NoDup us ->
+      forall vs (u : U) (v1 v2 : V),
+        In (u,v1) (combine us vs) ->
+        In (u,v2) (combine us vs) ->
+        v1 = v2.
+  Proof.
+    intros us Hnd; induction Hnd;
+      intros [| v vs] u v1 v2 Hv1 Hv2;
+      simpl in *; try contradiction.
+    destruct Hv1 as [Hv1 | Hv1];
+      destruct Hv2 as [Hv2 | Hv2]; subst;
+        try inv Hv1; try inv Hv2; eauto.
+    - apply in_combine_l in Hv2; contradiction.
+    - apply in_combine_l in Hv1; contradiction.
+  Qed.
+
+  Lemma in_combine_nth_error : forall us vs (u : U) (v : V),
+      In (u,v) (combine us vs) ->
+      exists n, nth_error us n = Some u /\ nth_error vs n = Some v.
+  Proof.
+    intro us; induction us as [| hu us IHus];
+      intros [| hv vs] u v Hin; simpl in *;
+        try contradiction.
+    destruct Hin as [Hin | Hin]; try inv Hin.
+    - exists 0; auto.
+    - apply IHus in Hin as (n & Hus & Hvs).
+      exists (S n); auto.
+  Qed.
+
+  Lemma nth_error_combine_some : forall n us vs (u : U) (v : V),
+      nth_error us n = Some u ->
+      nth_error vs n = Some v ->
+      nth_error (combine us vs) n = Some (u, v).
+  Proof.
+    intro n; induction n as [| n IHn];
+      intros [| hu us] [| hv vs] u v Hu Hv;
+      simpl in *; inv Hu; inv Hv; auto.
+  Qed.
+  
+  Local Hint Resolve nth_error_combine_some : core.
+
+  Lemma in_combine_index : forall n us vs (u : U) (v : V),
+      nth_error us n = Some u ->
+      nth_error vs n = Some v ->
+      In (u,v) (combine us vs).
+  Proof.
+    intros n us vs u v Hu Hv.
+    eauto using nth_error_In.
+  Qed.
+
+  Context {HEU : EqDec U eq} {HEV : EqDec V eq}.
+  
+  Lemma not_in_combine : forall us vs (u : U) (v : V),
+      ~ In (u,v) (combine us vs) ->
+      ~ In u us /\ ~ In v vs \/
+      In u us   /\ ~ In v vs \/
+      ~ In u us /\   In v vs \/
+      exists m n, m <> n /\ nth_error us m = Some u /\ nth_error vs n = Some v.
+  Proof.
+    intros us vs u v Hin.
+    pose proof in_dec HEU u us as [Huus | Huus];
+      pose proof in_dec HEV v vs as [Hvvs | Hvvs]; auto.
+    apply In_nth_error in Huus, Hvvs.
+    destruct Huus as [p Hus]; destruct Hvvs as [q Hvs].
+    repeat right. exists p, q; intuition; subst.
+    apply Hin. apply nth_error_In with q; auto.
+  Qed.
 End PairLists.
+
+Lemma flipper_combine_map_fst : forall {U V : Set} (us : list U) (vs : list V),
+    map fst (flipper (combine us vs)) =
+    firstn (min (length us) (length vs)) vs.
+Proof.
+  intros U V us vs.
+  rewrite flipper_combine.
+  rewrite combine_map_fst.
+  f_equal. lia.
+Qed.
+
+Lemma flipper_combine_map_snd : forall {U V : Set} (us : list U) (vs : list V),
+    map snd (flipper (combine us vs)) =
+    firstn (min (length us) (length vs)) us.
+Proof.
+  intros U V us vs.
+  rewrite flipper_combine.
+  rewrite combine_map_snd.
+  f_equal; lia.
+Qed.
+
+Lemma combine_map_l :
+  forall {U V W : Set} (f : U -> W) (us : list U) (vs : list V),
+    combine (map f us) vs = map (fun '(u,v) => (f u,v)) (combine us vs).
+Proof.
+  intros U V W f us; induction us as [| u us IHus];
+    intros [| v vs]; simpl; f_equal; auto.
+Qed.
+
+Lemma combine_map_r :
+  forall {U V W : Set} (f : V -> W) (us : list U) (vs : list V),
+    combine us (map f vs) = map (fun '(u,v) => (u,f v)) (combine us vs).
+Proof.
+  intros U V W f us; induction us as [| u us IHus];
+    intros [| v vs]; simpl; f_equal; auto.
+Qed.
+
+Lemma in_combine_flip :
+  forall {U V : Set} us vs (u : U) (v : V),
+    In (u,v) (combine us vs) -> In (v,u) (combine vs us).
+Proof.
+  intros U V us; induction us as [| hu us IHus];
+    intros [| hv vs] u v Hin; simpl in *;
+      try contradiction.
+  destruct Hin as [Huv | Hin]; try inv Huv; auto.
+Qed.
+
+Lemma nodup_nth_error : forall (A : Set) l,
+    NoDup l ->
+    forall m n (a : A),
+      nth_error l m = Some a ->
+      nth_error l n = Some a -> m = n.
+Proof.
+  intros A l Hnd; induction Hnd;
+    intros [| m] [| n] h Hm Hn; simpl in *;
+      try discriminate; auto.
+  - inv Hm; apply nth_error_In in Hn; contradiction.
+  - inv Hn; apply nth_error_In in Hm; contradiction.
+  - f_equal; eauto.
+Qed.

@@ -119,6 +119,15 @@ Section Env.
       intros k v; simpl; intros H;
         try discriminate; dispatch_eqdec; firstorder; inv H; auto.
   Qed.
+
+  Lemma lookup_not_in : forall l (k : K),
+      lookup k l = None -> forall v : V, ~ In (k,v) l.
+  Proof.
+    intro l; induction l as [| [k' v'] l IHl];
+      intros k H v; simpl in *; auto;
+        dispatch_eqdec; inv H; intros [Hkv | Hkv];
+          try inv Hkv; try contradiction; firstorder.
+  Qed.
   
   Lemma in_lookup_nodup : forall l (k : K) (v : V),
       NoDup (map fst l) -> In (k, v) l -> lookup k l = Some v.
