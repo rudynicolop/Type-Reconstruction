@@ -128,6 +128,14 @@ Section Env.
         dispatch_eqdec; inv H; intros [Hkv | Hkv];
           try inv Hkv; try contradiction; firstorder.
   Qed.
+
+  Lemma lookup_not_in_domain : forall (l : list (K * V)) k,
+      lookup k l = None -> ~ In k (map fst l).
+  Proof.
+    intro l; induction l as [| [k v] l IHl];
+      intros ky Hnone Hin; simpl in *; auto.
+    dispatch_eqdec; try discriminate; firstorder.
+  Qed.
   
   Lemma in_lookup_nodup : forall l (k : K) (v : V),
       NoDup (map fst l) -> In (k, v) l -> lookup k l = Some v.

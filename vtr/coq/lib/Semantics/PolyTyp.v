@@ -42,63 +42,12 @@ Qed.
 
 Reserved Notation "p1 ≂ p2" (at level 70, no associativity).
 
-Inductive alpha (p : poly) : poly -> Prop :=
-| alpha_eq YS :
-  Forall (fun Y => Y ∉ ptvars p) YS ->
-  p ≂ ∀ YS, ~[pvars p ⟼  map TVar YS]~ † ptyp p
-where "p1 ≂ p2" := (alpha p1 p2) : type_scope.
+Definition alpha '((∀ XS, x) as p : poly) '(∀ YS, y : poly) : Prop :=
+  length XS = length YS /\
+  Forall (fun Y => Y ∉ ptvars p) YS /\
+  ~[XS ⟼  map TVar YS]~ † x = y.
 
-(*
-Section AlphaExamples.
-  Local Hint Unfold alpha : core.
-  Local Hint Unfold combine_to_env : core.
-  Local Hint Unfold bind : core.
-
-  Ltac figure :=
-    intros;
-    repeat
-      (autounfold with * in *; simpl in *; try dispatch_eqdec);
-    auto.
-
-  Ltac distinct_ex n :=
-    match goal with
-    | |- exists (_ : nat), _ => exists n; distinct_ex (S n)
-    | |- _ => idtac
-    end.
-
-  Ltac dispute :=
-    distinct_ex 0;
-    match goal with
-    | |- ~ _ => intros ?
-    end; figure;
-    try contradiction; try lia; try discriminate.
-  
-  Goal forall X Y, ∀ [X;Y], X → Y ≂ ∀ [Y;X], Y → X.
-  Proof.
-    figure.
-  Qed.
-
-  Goal forall X Y, ∀ [Y;X], Y → X ≂ ∀ [X;Y], X → Y.
-  Proof.
-    figure.
-  Qed.
-
-  Goal exists X Y Z, ~ ∀ [X;Y], X → Y ≂ ∀ [Z], Z → Z.
-  Proof.
-    dispute.
-  Qed.
-
-  Goal forall X Y Z : nat, ∀ [X], X → Y ≂ ∀ [X;Z], X → Y.
-  Proof.
-    figure.
-  Qed.
-
-  Goal forall X Y Z : nat, ∀ [X;Z], X → Y ≂ ∀ [X], X → Y.
-  Proof.
-    figure.
-  Qed.
-End AlphaExamples.
-*)
+Notation "p1 ≂ p2" := (alpha p1 p2) : type_scope.
 
 Section Alpha.
   Lemma tvars_sub_tvar_same : forall TS T,
@@ -120,9 +69,7 @@ Section Alpha.
       intro TS; simpl; auto; f_equal; auto.
   Qed.
 
-  (* Local Hint Resolve tvars_tsub_same : core. *)
-  Local Hint Unfold Reflexive : core.
-  Local Hint Constructors alpha : core.
+  Local Hint Resolve tvars_tsub_same : core.
 
   Lemma ptvars_same_Forall : forall XS x,
       Forall (fun Y : nat => Y ∉ ptvars (∀ XS, x)) XS.
@@ -144,23 +91,70 @@ Section Alpha.
   Qed.
 
   Local Hint Resolve ptvars_same_Forall : core.
+  Create HintDb alphadb.
+  Local Hint Unfold Reflexive : alphadb.
+  Local Hint Unfold alpha : alphadb.
   
   Lemma alpha_reflexive : Reflexive alpha.
   Proof.
-    autounfold with core; intros [XS x].
-    rewrite <- tvars_tsub_same with (TS := XS) at 2.
-    constructor; auto.
+    autounfold with alphadb; intros [XS x]; firstorder.
   Qed.
 
-  Local Hint Unfold Symmetric : core.
-
+  Lemma not_in_free_vars_sym : forall x XS YS,
+      length XS = length YS ->
+      Forall (fun Y : nat => Y ∉ ptvars (∀ XS, x)) YS ->
+      Forall
+        (fun Y : nat =>
+           Y ∉ ptvars (∀ YS, ~[ XS ⟼ map TVar YS ]~ † x)) XS.
+  Proof.
+    intros t XS YS.
+    repeat rewrite Forall_forall.
+    generalize dependent YS;
+      generalize dependent XS.
+    induction t as [| | t1 IHt1 t2 IHt2 | T];
+      intros XS YS Hlen Hys X Hxs Hx; cbn in *; auto.
+    - rewrite difference_app_l in Hys, Hx.
+      rewrite in_app_iff in Hx.
+      specialize IHt1 with XS YS X;
+        specialize IHt2 with XS YS X.
+      destruct Hx as [Ht1 | Ht2];
+        [apply IHt1 in Ht1 | apply IHt2 in Ht2];
+        clear IHt1 IHt2; auto;
+          intros Z Hzys HZ; apply Hys in Hzys;
+            rewrite in_app_iff in Hzys; auto.
+    - rewrite app_nil_r in Hys.
+      destruct (~[ XS ⟼ map TVar YS ]~ T)
+        as [z |] eqn:Hz;
+        try apply combine_binds_only_tvar in Hz as Hz';
+        try destruct Hz' as [Z HZ]; subst; simpl in *.
+      + rewrite app_nil_r in Hx.
+        pose proof In_member_reflects Z YS as Hzys;
+          inversion Hzys as [Hin Hmem | Hin Hmem]; clear Hzys;
+            rewrite <- Hmem in Hx; simpl in *; try contradiction;
+              destruct Hx; subst; try contradiction.
+        rewrite combine_to_env_lookup in Hz.
+        apply lookup_in in Hz.
+        apply in_combine_r in Hz.
+        rewrite in_map_iff in Hz.
+        destruct Hz as (X' & HX' & Hinx); inv HX';
+          contradiction.
+      + pose proof In_member_reflects T YS as Htys;
+          inversion Htys as [Hin Hmem | Hin Hmem]; clear Htys;
+            rewrite <- Hmem in Hx; simpl in *; try contradiction;
+              destruct Hx; subst; try contradiction.
+        rewrite combine_to_env_lookup in Hz.
+        apply lookup_not_in_domain in Hz.
+        rewrite combine_map_fst, map_length, <- Hlen, Nat.min_id, firstn_all in Hz.
+        contradiction.
+  Qed.
+  
+  Local Hint Unfold Symmetric : alphadb.
+  Local Hint Resolve not_in_free_vars_sym : core.
+  
   Lemma alpha_symmetric : Symmetric alpha.
   Proof.
-    autounfold with *; intros [XS x] [YS y] H; inv H.
-    rename H1 into H.
-    pose proof tvars_tsub_same x YS as Hy.
-    pose proof alpha_eq
-         (∀ YS, ~[ XS ⟼ map TVar YS ]~ † x) XS as Ha; simpl in Ha.
+    autounfold with alphadb; intros [XS x] [YS y] (Hlen & Hys & Hy); subst y.
+    repeat split; auto.
   Abort.
 
   Local Hint Unfold Transitive : core.
