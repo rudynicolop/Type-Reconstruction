@@ -26,70 +26,6 @@ Definition pnv (t : typ) : poly :=
 
 Coercion pnv : typ >-> poly.
 
-Reserved Notation "C ⊩ t1 ≂ t2" (at level 70, no associativity).
-
-Inductive alpha (C : list (nat * nat)) : typ -> typ -> Prop :=
-| alpha_nat :
-    C ⊩ TNat ≂ TNat
-| alpha_bool :
-    C ⊩ TBool ≂ TBool
-| alpha_arrow τ1 τ2 ρ1 ρ2 :
-    C ⊩ τ1 ≂ ρ1 ->
-    C ⊩ τ2 ≂ ρ2 ->
-    C ⊩ τ1 → τ2 ≂ ρ1 → ρ2
-| alpha_var (X Y : nat) :
-    X = Y \/ In (X, Y) C ->
-    C ⊩ X ≂ Y
-where "C ⊩ t1 ≂ t2" := (alpha C t1 t2) : type_scope.
-
-Section Alpha.
-  Local Hint Unfold Reflexive : core.
-  Local Hint Constructors alpha : core.
-  
-  Lemma alpha_reflexive : forall C, Reflexive (alpha C).
-  Proof.
-    autounfold with *; intros C t;
-      induction t as [| | t1 IHt1 t2 IHt2 | T]; auto.
-  Qed.
-
-  Local Hint Unfold Symmetric : core.
-
-  (*Lemma alpha_symmetric : forall C, Symmetric (alpha C).
-  Proof.
-    autounfold with *; intros C x y Hxy;
-      induction Hxy; intuition.
-  Qed.*)
-  
-  Local Hint Resolve in_flipper : core.
-  
-  Lemma alpha_symmetric_flip : forall C x y,
-      C ⊩ x ≂ y -> flipper C ⊩ y ≂ x.
-  Proof.
-    intros C x y Hxy; induction Hxy; intuition.
-  Qed.
-
-  Lemma alpha_transitive : forall XS YS x y,
-      combine XS YS ⊩ x ≂ y ->
-      forall ZS z,
-        combine YS ZS ⊩ y ≂ z ->
-        combine XS ZS ⊩ x ≂ z.
-  Proof.
-    intros XS YS x y Hxy; induction Hxy;
-      intros ZS z Hyz; inv Hyz; auto.
-    rename Y0 into Z.
-    constructor.
-    intuition; subst; auto.
-    - right. admit.
-    - right. admit.
-    - right.
-      apply in_combine_nth_error in H0 as (n & HXS  & HYS).
-      apply in_combine_nth_error in H  as (m & HYS' & HZS).
-      enough (Hndy: NoDup YS).
-      pose proof nodup_nth_error _ _ Hndy _ _ _ HYS HYS'; subst.
-      eauto using in_combine_index. admit.
-  Abort.
-End Alpha.
-
 Definition binds_only_tvar (s : tenv) : Prop :=
   forall X t, s X = Some t -> exists Y, t = TVar Y.
 
@@ -103,7 +39,7 @@ Proof.
   unfold bind in H.
   dispatch_eqdec; inv H; eauto.
 Qed.
-(*
+
 Definition alpha
            '(∀ XS, x : poly)
            '(∀ YS, y : poly) : Prop :=
@@ -113,7 +49,59 @@ Notation "p1 ≂ p2"
   := (alpha p1 p2)
        (at level 70, no associativity) : type_scope.
 
+Section AlphaExamples.
+  Local Hint Unfold alpha : core.
+  Local Hint Unfold combine_to_env : core.
+  Local Hint Unfold bind : core.
+
+  Ltac figure :=
+    intros;
+    repeat
+      (autounfold with * in *; simpl in *; try dispatch_eqdec);
+    auto.
+
+  Ltac distinct_ex n :=
+    match goal with
+    | |- exists (_ : nat), _ => exists n; distinct_ex (S n)
+    | |- _ => idtac
+    end.
+
+  Ltac dispute :=
+    distinct_ex 0;
+    match goal with
+    | |- ~ _ => intros ?
+    end; figure;
+    try contradiction; try lia; try discriminate.
+  
+  Goal forall X Y, ∀ [X;Y], X → Y ≂ ∀ [Y;X], Y → X.
+  Proof.
+    figure.
+  Qed.
+
+  Goal forall X Y, ∀ [Y;X], Y → X ≂ ∀ [X;Y], X → Y.
+  Proof.
+    figure.
+  Qed.
+
+  Goal exists X Y Z, ~ ∀ [X;Y], X → Y ≂ ∀ [Z], Z → Z.
+  Proof.
+    dispute.
+  Qed.
+
+  Goal forall X Y Z : nat, ∀ [X], X → Y ≂ ∀ [X;Z], X → Y.
+  Proof.
+    figure.
+  Qed.
+
+  Goal forall X Y Z : nat, ∀ [X;Z], X → Y ≂ ∀ [X], X → Y.
+  Proof.
+    figure.
+  Qed.
+End AlphaExamples.
+
 Section Alpha.
+  Local Hint Unfold alpha : core.
+    
   Lemma tvars_sub_tvar_same : forall TS T,
     match ~[ TS ⟼ map TVar TS ]~ T with
     | Some τ => τ
@@ -134,7 +122,6 @@ Section Alpha.
   Qed.
 
   Local Hint Resolve tvars_tsub_same : core.
-  Local Hint Unfold alpha : core.
   Local Hint Unfold Reflexive : core.
   
   Lemma alpha_reflexive : Reflexive alpha.
@@ -200,16 +187,25 @@ Section Alpha.
         try destruct Htyxs as [Htxs Htys];
         try destruct Hmn as (p & q & Hpq & Hp & Hq);
         try contradiction.
-      +
+      + admit.
   Abort.
       
   Lemma tvars_tsub_involutive : forall t XS YS,
+      NoDup XS -> NoDup YS ->
       ~[ XS ⟼ map TVar YS ]~ † ~[ YS ⟼ map TVar XS ]~ † t = t.
   Proof.
     intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
-      intros XS YS; simpl; auto.
-    - rewrite IHt1, IHt2; reflexivity.
-    -
+      intros XS YS Hndx Hndy; try (simpl; auto; assumption).
+    - simpl; rewrite IHt1, IHt2; auto.
+    - rewrite tsub_assoc.
+      unfold "‡"; simpl.
+      (* let X ≠ Y.
+         ∴ (X ↦ Y) † (Y ↦ X) † X = (X ↦ Y) X = Y ≠ X.
+         ∀ [X], X ≂ ∀ [Y], Y ↔ X = (Y ↦ X) † Y = X
+         ∴ ∀ [X], X ≂ ∀ [Y], Y.
+         ∀ [Y], Y ≂ ∀ [X], X ↔ Y = (X ↦ Y) † X = Y
+         ∴ ∀ [Y], Y ≂ ∀ [X], X.
+       *)
   Abort.
   
   Local Hint Unfold Symmetric : core.
@@ -217,10 +213,95 @@ Section Alpha.
   Lemma alpha_symmetric : Symmetric alpha.
   Proof.
     autounfold with *; intros [XS x] [YS y] H.
+    generalize dependent YS;
+      generalize dependent XS;
+      generalize dependent y.
+    induction x as [| | x1 IHx1 x2 IHx2 | X];
+      intros [| | y1 y2 | Y] XS YS Hxy;
+      try (simpl in *; try discriminate; auto; assumption).
+    - simpl in *.
+      destruct
+        (~[ uniques YS ⟼ map TVar (uniques XS) ]~ Y)
+        as [z |] eqn:Hz;
+        try apply combine_binds_only_tvar in Hz as [Z HZ];
+        subst; try discriminate.
+    - simpl in *.
+      destruct
+        (~[ uniques YS ⟼ map TVar (uniques XS) ]~ Y)
+        as [z |] eqn:Hz;
+        try apply combine_binds_only_tvar in Hz as [Z HZ];
+        subst; try discriminate.
+    - simpl in *.
+      injection Hxy as Hx1 Hx2.
+      apply IHx1 in Hx1. apply IHx2 in Hx2.
+      subst; reflexivity.
+    - simpl in *.
+      destruct
+        (~[ uniques YS ⟼ map TVar (uniques XS) ]~ Y)
+        as [z |] eqn:Hz;
+        try apply combine_binds_only_tvar in Hz as [Z HZ];
+        subst; try discriminate.
+    - (* Either:
+         1. [Y] is bound in [YS],
+            & if [length XS <= length YS]
+            the substitution is bijective;
+            thus the goal is satisfied.
+         2. [Y] is not bound in [YS],
+            suggesting [X = Y],
+            & [Y] is free in [∀ YS, y].
+            a. [Y] is not bound in XS; thus trivial.
+            b. [Y] is bound in [XS],
+               & if [length YS <= length XS]
+               & [Y] is not free in [∀ XS, x].
+               then trouble starts, b/c
+               [Y] will be mapped to some [W] in [YS].
+               We know that [Y <> W] b/c
+               [In W YS /\ ~ In Y YS]. *)
+      (* An example of the problem:
+         Consider [x = ∀ [X], X], [y = ∀ [Y], X].
+         [X = (Y ↦ X) † X = X] whether or not [X = Y].
+         ∴ by my def [∀ [X], X] ≂ ∀ [Y], X].
+         This is bad because [x] is not alpha equivalent to [y].
+         [X = (X ↦ Y) † X = Y] only makes sense if [X = Y].
+         Thus my definition [≂] is flawed. *)
+      simpl in *.
+      destruct
+        (~[ uniques YS ⟼ map TVar (uniques XS) ]~ Y)
+        as [z |] eqn:Hz;
+        try apply combine_binds_only_tvar in Hz as Hz';
+        try destruct Hz' as [Z HZ].
+      + subst. inv Hxy.
+        destruct
+          (~[ uniques XS ⟼ map TVar (uniques YS) ]~ Z)
+          as [w |] eqn:Hw;
+          try apply combine_binds_only_tvar in Hw as Hw';
+          try destruct Hw' as [W HW]; subst.
+        * (* provable. *) admit.
+        * (* contradiction. *) admit.
+      + inv Hxy.
+        destruct
+          (~[ uniques XS ⟼ map TVar (uniques YS) ]~ Y)
+          as [w |] eqn:Hw;
+          try apply combine_binds_only_tvar in Hw as Hw';
+          try destruct Hw' as [W HW];
+          subst; auto.
+        (* stuck in the same way:
+           provably [Y <> W];
+           but the goal is [Y = W]. *)
+      (*
     rewrite H.
+    enough (XS = [0]).
+    enough (YS = [1]).
+    enough (x = 1).
+    enough (y = 0).
+    { subst.
+      unfold uniques, remove,
+      combine_to_env, combine,
+      to_env, map, fold_right, uncurry in *.
+      simpl in *. *)
   Abort.
 End Alpha.
-*)
+
 Reserved Notation "g ⫢ e ∴ p"
          (at level 70, no associativity).
 
@@ -250,7 +331,7 @@ Inductive DM (Γ : pgamma) : term -> poly -> Prop :=
     Γ ⫢ e ∴ (∀ XS, τ) ->
     Γ ⫢ e ∴ ~[ XS ⟼  TS ]~ † τ
 | DM_cond e1 e2 e3 p p' :
-    (*p ≂ p' ->*)
+    p ≂ p' ->
     Γ ⫢ e1 ∴ TBool ->
     Γ ⫢ e2 ∴ p ->
     Γ ⫢ e3 ∴ p' ->
