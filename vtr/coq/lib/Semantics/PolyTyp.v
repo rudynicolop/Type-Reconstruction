@@ -43,9 +43,9 @@ Qed.
 Reserved Notation "p1 ≂ p2" (at level 70, no associativity).
 
 Definition alpha '((∀ XS, x) as p : poly) '(∀ YS, y : poly) : Prop :=
-  length XS = length YS /\
+  length (uniques XS) = length (uniques YS) /\
   Forall (fun Y => Y ∉ ptvars p) YS /\
-  ~[XS ⟼  map TVar YS]~ † x = y.
+  ~[uniques XS ⟼  map TVar (uniques YS)]~ † x = y.
 
 Notation "p1 ≂ p2" := (alpha p1 p2) : type_scope.
 
@@ -102,10 +102,10 @@ Section Alpha.
 
   Lemma not_in_free_vars_sym : forall x XS YS,
       length XS = length YS ->
-      Forall (fun Y : nat => Y ∉ ptvars (∀ XS, x)) YS ->
+      Forall (fun Y : nat => Y ∉ tvars x ∖ XS) YS ->
       Forall
         (fun Y : nat =>
-           Y ∉ ptvars (∀ YS, ~[ XS ⟼ map TVar YS ]~ † x)) XS.
+           Y ∉ tvars (~[ XS ⟼ map TVar YS ]~ † x) ∖ YS) XS.
   Proof.
     intros t XS YS.
     repeat rewrite Forall_forall.
@@ -147,22 +147,104 @@ Section Alpha.
         rewrite combine_map_fst, map_length, <- Hlen, Nat.min_id, firstn_all in Hz.
         contradiction.
   Qed.
-  
+
+  Lemma tvars_tsub_tvar_involutive : forall XS YS T,
+      NoDup XS -> NoDup YS ->
+      length XS = length YS ->
+      Forall (fun Y : nat => Y ∉ [T] ∖ XS) YS ->
+      ~[YS ⟼  map TVar XS]~
+       † match ~[XS ⟼  map TVar YS]~ T with
+         | Some τ => τ
+         | None => T
+         end = T.
+  Proof.
+    intros XS YS T Hndx Hndy Hlen Hfays; simpl in *.
+    rewrite app_nil_r in Hfays.
+    destruct (~[XS ⟼  map TVar YS]~ T)
+      as [t |] eqn:Heqt;
+      try apply combine_binds_only_tvar in Heqt as HOT;
+      try destruct HOT as [Z HZ]; subst; simpl.
+    - destruct (~[YS ⟼  map TVar XS]~ Z)
+        as [t |] eqn:Heqt';
+        try apply combine_binds_only_tvar in Heqt' as HOT;
+        try destruct HOT as [W HW]; subst; simpl.
+      + rewrite combine_to_env_lookup in Heqt.
+        rewrite combine_to_env_lookup in Heqt'.
+        apply lookup_in in Heqt  as HT.
+        apply lookup_in in Heqt' as HZ.
+        rewrite combine_map_r in HT, HZ.
+        rewrite in_map_iff in HT, HZ.
+        destruct HT as ((x1 & x2) & H1 & HYX);
+          destruct HZ as ((x3 & x4) & H2 & HXY);
+          inv H1; inv H2.
+        apply in_combine_flip in HYX.
+        eauto using NoDup_pair_eq_r.
+      + exfalso.
+        rewrite combine_to_env_lookup in Heqt, Heqt'.
+        apply lookup_in in Heqt as HT.
+        apply lookup_not_in with (v:=TVar T) in Heqt' as HZ.
+        rewrite combine_map_r in HT, HZ.
+        rewrite in_map_iff in HT, HZ.
+        destruct HT as ((x1 & x2) & Huv & HYXS); inv Huv.
+        apply in_combine_flip in HYXS. firstorder.
+    - destruct (~[YS ⟼  map TVar XS]~ T)
+        as [t |] eqn:Heqt';
+        try apply combine_binds_only_tvar in Heqt' as HOT;
+        try destruct HOT as [W HW]; subst; simpl; auto.
+      rewrite Forall_forall in Hfays.
+      rewrite combine_to_env_lookup in Heqt, Heqt'.
+      apply lookup_in in Heqt' as HW.
+      apply in_combine_l in HW as HW'.
+      apply Hfays in HW'.
+      apply lookup_not_in_domain in Heqt.
+      rewrite combine_map_fst in Heqt.
+      rewrite map_length, <- Hlen, Nat.min_id, firstn_all in Heqt.
+      rewrite <- Not_In_member_iff in Heqt.
+      rewrite Heqt in HW'; simpl in *.
+      exfalso. intuition.
+  Qed.
+
+  Local Hint Resolve tvars_tsub_tvar_involutive : core.
+
+  Lemma tvars_tsub_involutive : forall t XS YS,
+      NoDup XS -> NoDup YS ->
+      length XS = length YS ->
+      Forall (fun Y : nat => Y ∉ tvars t ∖ XS) YS ->
+      ~[ YS ⟼ map TVar XS ]~ † ~[ XS ⟼ map TVar YS ]~ † t = t.
+  Proof.
+    intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
+      intros XS YS Hndx Hndy Hlen Hfays; simpl in *; auto.
+    rewrite difference_app_l in Hfays.
+    enough (Forall (fun Y : nat => Y ∉ tvars t1 ∖ XS) YS /\
+            Forall (fun Y : nat => Y ∉ tvars t2 ∖ XS) YS).
+    simpl; rewrite IHt1, IHt2; intuition.
+    repeat rewrite Forall_forall in *.
+    split; intros Z Hzys Hzd; apply Hfays in Hzys;
+      rewrite in_app_iff in Hzys; auto.
+  Qed.
+
+  Local Hint Resolve tvars_tsub_involutive : core.
   Local Hint Unfold Symmetric : alphadb.
   Local Hint Resolve not_in_free_vars_sym : core.
+  Local Hint Resolve uniques_nodup : core.
   
   Lemma alpha_symmetric : Symmetric alpha.
   Proof.
     autounfold with alphadb; intros [XS x] [YS y] (Hlen & Hys & Hy); subst y.
-    repeat split; auto.
-  Abort.
+    repeat split; simpl in *; auto.
+    - rewrite <- diff_uniques with (r := YS).
+      rewrite <- diff_uniques with (r := XS) in Hys.
+      rewrite <- uniques_Forall with (l := XS).
+      rewrite <- uniques_Forall with (l := YS) in Hys; auto.
+    - rewrite <- diff_uniques in Hys.
+      rewrite <- uniques_Forall in Hys; auto.
+  Qed.
 
   Local Hint Unfold Transitive : core.
   
   Lemma alpha_transitive : Transitive alpha.
   Proof.
     autounfold with *; intros [XS x] [YS y] [ZS z] Hxy Hyz.
-    inv Hxy; inv Hyz.
   Abort.
 End Alpha.
 

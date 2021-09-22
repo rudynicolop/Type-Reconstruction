@@ -338,6 +338,12 @@ Section Uniques.
     rewrite uniques_app2.
     rewrite app_length. lia.
   Qed.
+
+  Lemma uniques_Forall : forall P l,
+      Forall P (uniques l) <-> Forall P l.
+  Proof.
+    intros P l; repeat rewrite Forall_forall; intuition.
+  Qed.
 End Uniques.
 
 Section Inside.

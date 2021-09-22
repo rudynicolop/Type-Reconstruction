@@ -438,6 +438,20 @@ Section Sets.
     rewrite IHl. reflexivity.
   Qed.
 
+  Lemma diff_uniques : forall l r : list A, l ∖ uniques r = l ∖ r.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intro r; simpl in *; auto.
+    pose proof In_member_reflects h r as Hhr;
+      inversion Hhr as [Hin Hmem | Hin Hmem]; clear Hhr; simpl.
+    - rewrite <- uniques_iff in Hin.
+      rewrite <- In_member_iff in Hin.
+      rewrite Hin; simpl; auto.
+    - rewrite <- uniques_iff in Hin.
+      rewrite <- Not_In_member_iff in Hin.
+      rewrite Hin; simpl; f_equal; auto.
+  Qed.
+  
   Local Hint Resolve Permutation_app_comm : core.
   
   Lemma length_uniques_app : forall l r : list A,
