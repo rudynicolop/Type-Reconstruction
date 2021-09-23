@@ -144,7 +144,8 @@ Section Alpha.
               destruct Hx; subst; try contradiction.
         rewrite combine_to_env_lookup in Hz.
         apply lookup_not_in_domain in Hz.
-        rewrite combine_map_fst, map_length, <- Hlen, Nat.min_id, firstn_all in Hz.
+        rewrite combine_map_fst, map_length,
+        <- Hlen, Nat.min_id, firstn_all in Hz.
         contradiction.
   Qed.
 
@@ -217,7 +218,7 @@ Section Alpha.
     rewrite difference_app_l in Hfays.
     enough (Forall (fun Y : nat => Y ∉ tvars t1 ∖ XS) YS /\
             Forall (fun Y : nat => Y ∉ tvars t2 ∖ XS) YS).
-    simpl; rewrite IHt1, IHt2; intuition.
+    rewrite IHt1, IHt2; intuition.
     repeat rewrite Forall_forall in *.
     split; intros Z Hzys Hzd; apply Hfays in Hzys;
       rewrite in_app_iff in Hzys; auto.
@@ -240,11 +241,94 @@ Section Alpha.
       rewrite <- uniques_Forall in Hys; auto.
   Qed.
 
+  Lemma tsub_tsub_tvar_compose : forall XS YS ZS T,
+      NoDup XS -> NoDup YS -> NoDup ZS ->
+      length XS = length YS -> length YS = length ZS ->
+      Forall (fun Y : nat => Y ∉ [T] ∖ XS) YS ->
+      Forall
+        (fun Z : nat =>
+           Z ∉ tvars match ~[ XS ⟼ map TVar YS ]~ T with
+                     | Some τ => τ
+                     | None => T
+                     end ∖ YS) ZS ->
+      match ~[ XS ⟼ map TVar ZS ]~ T with
+      | Some τ => τ
+      | None => T
+      end =
+      ~[ YS ⟼ map TVar ZS ]~ †
+       match ~[ XS ⟼ map TVar YS ]~ T with
+       | Some τ => τ
+       | None => T
+       end.
+  Proof.
+    intros XS YS ZS T Hndx Hndy Hndz Hxyl Hyzl Hxys Hyzs; simpl in *.
+    rewrite app_nil_r in Hxys.
+    destruct (~[ XS ⟼ map TVar YS ]~ T) as [y |] eqn:Heqy;
+      try apply combine_binds_only_tvar in Heqy as HOT;
+      try destruct HOT as [YY HYY]; subst; simpl in *.
+    - rewrite app_nil_r in Hyzs.
+      rewrite combine_to_env_lookup in Heqy.
+      apply lookup_in in Heqy as Hliy.
+      apply in_combine_l in Hliy.
+      assert (HTmf : T ∈ map fst (combine XS (map TVar ZS))).
+      { rewrite combine_map_fst, map_length,
+        <- Hyzl, <- Hxyl, Nat.min_id, firstn_all; assumption. }
+      apply in_domain_lookup in HTmf as [z' Hz'].
+      rewrite <- combine_to_env_lookup in Hz'.
+      apply combine_binds_only_tvar in Hz' as HZ';
+        rewrite Hz'; destruct HZ' as [Z' HZ']; subst.
+      destruct (~[ YS ⟼ map TVar ZS ]~ YY) as [z |] eqn:Heqz;
+      try apply combine_binds_only_tvar in Heqz as HOT;
+      try destruct HOT as [ZZ HZZ]; subst; simpl in *.
+      + admit.
+      + admit.
+    - admit.
+  Abort.
+  
+  Lemma tvars_tsub_compose : forall t XS YS ZS,
+      NoDup XS -> NoDup YS -> NoDup ZS ->
+      length XS = length YS -> length YS  = length ZS ->
+      Forall (fun Y => Y ∉ tvars t ∖ XS) YS ->
+      Forall (fun Z => Z ∉ tvars (~[XS ⟼  map TVar YS]~ † t) ∖ YS) ZS ->
+      ~[XS ⟼  map TVar ZS]~ † t =
+      ~[YS ⟼  map TVar ZS]~ † ~[XS ⟼  map TVar YS]~ † t.
+  Proof.
+    intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
+      intros XS YS ZS Hndx Hndy Hndz Hxyl Hyzl Hxys Hyzs;
+      try (simpl in *; auto; assumption).
+    - simpl in *.
+      rewrite difference_app_l in Hxys, Hyzs.
+      enough (Forall (fun Y => Y ∉ tvars t1 ∖ XS) YS /\
+              Forall (fun Y => Y ∉ tvars t2 ∖ XS) YS /\
+              Forall
+                (fun Z =>
+                   Z ∉ tvars (~[ XS ⟼ map TVar YS ]~ † t1) ∖ YS) ZS /\
+              Forall
+                (fun Z =>
+                   Z ∉ tvars (~[ XS ⟼ map TVar YS ]~ † t2) ∖ YS) ZS).
+      rewrite IHt1 with (YS := YS), IHt2 with (YS := YS); intuition.
+      repeat rewrite Forall_forall in *.
+      repeat split; intros W Hws Hwd;
+        try apply Hxys in Hws;
+        try apply Hyzs in Hws;
+        rewrite in_app_iff in Hws; auto.
+    -
+  Abort.
   Local Hint Unfold Transitive : core.
   
   Lemma alpha_transitive : Transitive alpha.
   Proof.
-    autounfold with *; intros [XS x] [YS y] [ZS z] Hxy Hyz.
+    autounfold with *;
+      intros [XS x] [YS y] [ZS z]
+             (Hxylen & Hfays & Hy) (Hyzlen & Hfazs & Hz).
+    subst y; subst z. repeat split; try lia.
+    - rewrite Forall_forall in *; simpl in *.
+      intros Z Hzzs Hzd.
+      pose proof Hfazs _ Hzzs as Hz'; clear Hfazs. admit.
+    - simpl in *.
+      rewrite tsub_assoc. f_equal.
+      unfold combine_to_env, to_env, "‡".
+      extensionality W.
   Abort.
 End Alpha.
 

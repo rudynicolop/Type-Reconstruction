@@ -3,6 +3,7 @@ Require Export Coq.Classes.EquivDec
         CoqRecon.Util.Env.
 
 Open Scope env_scope.
+Open Scope maybe_scope.
 
 Section Lookup.
   Context {K V : Set} {HDK : EqDec K eq}.
@@ -12,6 +13,93 @@ Section Lookup.
     | []         => None
     | (k',v) :: l => if k == k' then Some v else lookup k l
     end.
+
+  Fixpoint index_of (k : K) (l : list K) : option nat :=
+    match l with
+    | []    => None
+    | h :: l => if k == h then
+                Some 0
+              else
+                let! n := index_of k l in S n
+    end.
+
+  Lemma in_index_of : forall l k,
+      In k l -> exists n, index_of k l = Some n.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intros k Hkl; simpl in *; try contradiction.
+    eqdec k h; destruct Hkl as [Hhk | Hkl];
+      subst; try contradiction; eauto.
+    apply IHl in Hkl as (n & Hn).
+    rewrite Hn; maybe_simpl; eauto.
+  Qed.
+
+  Lemma index_of_in : forall l k n,
+      index_of k l = Some n -> In k l.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intros k n H; simpl in *; try discriminate.
+    dispatch_eqdec; maybe_simpl_hyp H; auto.
+    destruct (index_of k l) as [m |] eqn:Hm; inv H;
+      firstorder.
+  Qed.
+
+  Lemma index_of_nth_error : forall l k n,
+      index_of k l = Some n ->
+      nth_error l n = Some k.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intros k n Hio; simpl in *; try discriminate.
+    dispatch_eqdec.
+    - inv Hio; reflexivity.
+    - maybe_simpl_hyp Hio.
+      destruct (index_of k l) as [m |] eqn:Hm;
+        inv Hio; simpl; auto.
+  Qed.
+
+  Lemma nth_error_index_of : forall l n k,
+      ~ In k (firstn n l) ->
+      nth_error l n = Some k ->
+      index_of k l = Some n.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intros [| n] k Hnf Hnth; simpl in *;
+        try discriminate.
+    - inv Hnth; dispatch_eqdec; reflexivity.
+    - apply Decidable.not_or in Hnf as [Hhk Hnf].
+      dispatch_eqdec; maybe_simpl.
+      erewrite IHl by eauto; reflexivity.
+  Qed.
+
+  Lemma index_of_not_in_iff : forall l k,
+      index_of k l = None <-> ~ In k l.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intros k; split; intro H; simpl in *; auto.
+    - intros [Hhk | Hkl]; subst; dispatch_eqdec;
+        try discriminate; maybe_simpl_hyp H.
+      destruct (index_of k l) as [n |] eqn:Hn;
+        try discriminate; firstorder.
+    - apply Decidable.not_or in H as [Hhk Hkl].
+      dispatch_eqdec; maybe_simpl.
+      rewrite <- IHl in Hkl; rewrite Hkl; reflexivity.
+  Qed.
+  
+  Definition lookup' (k : K) (l : list (K * V)) : option V :=
+    let* n := index_of k (map fst l) in nth_error (map snd l) n.
+
+  Lemma lookup_lookup' : forall l (k : K),
+      lookup k l = lookup' k l.
+  Proof.
+    unfold lookup'.
+    intro l; induction l as [| [h v] l IHl];
+      intro k; maybe_simpl; auto.
+    specialize IHl with k.
+    dispatch_eqdec; auto.
+    destruct (index_of k (map fst l))
+      as [n |] eqn:Heqn; maybe_simpl_hyp IHl;
+      maybe_simpl; auto.
+  Qed.
   
   Definition to_env : list (K * V) -> @env K V :=
     fold_right (uncurry bind) ∅.
@@ -37,6 +125,38 @@ Notation "l ⩰ e"
 Notation "'~[' ks ⟼  vs ']~'"
   := (combine_to_env ks vs)
        (at level 4, no associativity) : env_scope.
+
+Section Map.
+  Context {A B : Set}.
+  Variable (f : A -> B).
+
+  Lemma nth_error_map : forall l n,
+      nth_error (map f l) n = omap f (nth_error l n).
+  Proof.
+    intro l; induction l as [| a l IHl];
+      intros [| n]; maybe_simpl; eauto.
+  Qed.
+
+  Context {HAED : EqDec A eq} {HBED : EqDec B eq}.
+  Hypothesis f_inj : forall a1 a2, f a1 = f a2 -> a1 = a2.
+  
+  Lemma index_of_map : forall l a,
+      index_of (f a) (map f l) = index_of a l.
+  Proof.
+    intro l; induction l as [| h l IHl];
+      intro a; simpl in *; auto.
+    repeat dispatch_eqdec;
+      maybe_simpl; firstorder.
+    rewrite IHl; reflexivity.
+  Qed.
+
+  Lemma index_of_map_eq : forall l a b,
+      b = f a -> index_of b (map f l) = index_of a l.
+  Proof.
+    intros l a b Hbfa; subst.
+    auto using index_of_map.
+  Qed.
+End Map.
 
 Section Env.
   Context {K V : Set} {HDK : EqDec K eq}.
@@ -135,6 +255,20 @@ Section Env.
     intro l; induction l as [| [k v] l IHl];
       intros ky Hnone Hin; simpl in *; auto.
     dispatch_eqdec; try discriminate; firstorder.
+  Qed.
+
+  Lemma in_domain_lookup : forall l (k : K),
+      In k (map fst l) -> exists v : V, lookup k l = Some v.
+  Proof.
+    intros l k Hin.
+    rewrite lookup_lookup'; unfold lookup'.
+    apply in_index_of in Hin as Hidx.
+    destruct Hidx as [m Hm]; rewrite Hm; maybe_simpl.
+    apply index_of_nth_error in Hm.
+    rewrite nth_error_map in Hm; maybe_simpl_hyp Hm.
+    rewrite nth_error_map; maybe_simpl.
+    destruct (nth_error l m) as [[k' v'] |] eqn:Hnth;
+      simpl in *; try discriminate; eauto.
   Qed.
   
   Lemma in_lookup_nodup : forall l (k : K) (v : V),
