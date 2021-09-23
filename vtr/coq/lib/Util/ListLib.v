@@ -518,9 +518,26 @@ Section PairLists.
       simpl in *; try contradiction.
     destruct Hv1 as [Hv1 | Hv1];
       destruct Hv2 as [Hv2 | Hv2]; subst;
-        try inv Hv1; try inv Hv2; eauto.
-    - apply in_combine_l in Hv2; contradiction.
-    - apply in_combine_l in Hv1; contradiction.
+        try inv Hv1; try inv Hv2; eauto;
+          try apply in_combine_l in Hv2;
+          try apply in_combine_l in Hv1; contradiction.
+  Qed.
+
+  Lemma NoDup_pair_eq_l : forall vs,
+      NoDup vs ->
+      forall us (u1 u2 : U) (v : V),
+        In (u1,v) (combine us vs) ->
+        In (u2,v) (combine us vs) ->
+        u1 = u2.
+  Proof.
+    intros vs Hnd; induction Hnd;
+      intros [| u us] u1 u2 v Hin1 Hin2;
+      simpl in *; try contradiction.
+    destruct Hin1 as [Hu1 | Hin1];
+      destruct Hin2 as [Hu2 | Hin2];
+      try inv Hu1; try inv Hu2; eauto;
+        try apply in_combine_r in Hin2;
+        try apply in_combine_r in Hin1; contradiction.
   Qed.
 
   Lemma in_combine_nth_error : forall us vs (u : U) (v : V),
@@ -575,6 +592,30 @@ Section PairLists.
     apply Hin. apply nth_error_In with q; auto.
   Qed.
 End PairLists.
+
+Lemma nodup_triple_eq_r : forall {U V W : Set} us,
+    NoDup us ->
+    forall (u : U) (v : V) (w1 w2 : W) vs ws,
+      NoDup vs ->
+      In (u,v) (combine us vs) ->
+      In (u,w1) (combine us ws) ->
+      In (v,w2) (combine vs ws) -> w1 = w2.
+Proof.
+  intros U V W us Hndus;
+    induction Hndus as [| hu us Hninu Hndus IHus];
+    intros u v w1 w2 vs [| w ws] Hndvs Huv Huw Hvw;
+    inversion Hndvs as [Hvsnil | hv tvs Hninhv Hndtvs]; subst;
+      simpl in *; try contradiction.
+  destruct Huv as [Huv | Huv];
+    destruct Huw as [Huw | Huw];
+    destruct Hvw as [Hvw | Hvw];
+    try inv Huv; try inv Huw; try inv Hvw; eauto;
+      try apply in_combine_l in Hvw;
+      try apply in_combine_l in Huw;
+      try apply in_combine_l in Huv as Hu';
+      try apply in_combine_r in Huv as Hv';
+      contradiction.
+Qed.
 
 Lemma flipper_combine_map_fst : forall {U V : Set} (us : list U) (vs : list V),
     map fst (flipper (combine us vs)) =
@@ -635,3 +676,23 @@ Proof.
   - inv Hn; apply nth_error_In in Hm; contradiction.
   - f_equal; eauto.
 Qed.
+
+(** My contribution to the standard library. *)
+Section CuttingMap.
+  Context {A B : Set}.
+  Variable (f : A -> B).
+  
+  Lemma firstn_map : forall n l,
+      firstn n (map f l) = map f (firstn n l).
+  Proof.
+    intro n; induction n as [| n IHn];
+      intros [| a l]; simpl in *; f_equal; auto.
+  Qed.
+
+  Lemma skipn_map : forall n l,
+      skipn n (map f l) = map f (skipn n l).
+  Proof.
+    intro n; induction n as [| n IHn];
+      intros [| a l]; simpl in *; f_equal; auto.
+  Qed.
+End CuttingMap.

@@ -231,17 +231,16 @@ Section Alpha.
   
   Lemma alpha_symmetric : Symmetric alpha.
   Proof.
-    autounfold with alphadb; intros [XS x] [YS y] (Hlen & Hys & Hy); subst y.
+    autounfold with alphadb;
+      intros [XS x] [YS y] (Hlen & Hys & Hy); subst y; simpl in *.
+    rewrite <- diff_uniques with (r := YS).
+    rewrite <- diff_uniques with (r := XS) in Hys.
+    rewrite <- uniques_Forall with (l := XS).
+    rewrite <- uniques_Forall with (l := YS) in Hys.
     repeat split; simpl in *; auto.
-    - rewrite <- diff_uniques with (r := YS).
-      rewrite <- diff_uniques with (r := XS) in Hys.
-      rewrite <- uniques_Forall with (l := XS).
-      rewrite <- uniques_Forall with (l := YS) in Hys; auto.
-    - rewrite <- diff_uniques in Hys.
-      rewrite <- uniques_Forall in Hys; auto.
   Qed.
 
-  Lemma tsub_tsub_tvar_compose : forall XS YS ZS T,
+  Lemma tsub_tvars_tvar_compose : forall XS YS ZS T,
       NoDup XS -> NoDup YS -> NoDup ZS ->
       length XS = length YS -> length YS = length ZS ->
       Forall (fun Y : nat => Y ∉ [T] ∖ XS) YS ->
@@ -277,13 +276,57 @@ Section Alpha.
       rewrite <- combine_to_env_lookup in Hz'.
       apply combine_binds_only_tvar in Hz' as HZ';
         rewrite Hz'; destruct HZ' as [Z' HZ']; subst.
-      destruct (~[ YS ⟼ map TVar ZS ]~ YY) as [z |] eqn:Heqz;
+      apply lookup_in_image in Heqy as Himagey.
+      rewrite combine_map_r,map_map,in_map_iff in Himagey.
+      destruct Himagey as ((X' & Y') & HY' & HX'in); simpl in *; inv HY'.
+      apply lookup_in in Heqy as Heqy'.
+      rewrite combine_map_r,in_map_iff in Heqy'.
+      destruct Heqy' as ((? & ?) & HeqTYY & Hinxsys);
+        simpl in *; inv HeqTYY.
+      assert (X' = T) by eauto using NoDup_pair_eq_l; subst; clear HX'in.
+      apply in_combine_r in Hinxsys as Hinys.
+      assert (Hinysdom : YY ∈ map fst (combine YS (map TVar ZS))).
+      { rewrite combine_map_fst, map_length,
+        <- Hyzl, Nat.min_id, firstn_all; assumption. }
+      apply in_domain_lookup in Hinysdom as [z Hz].
+      rewrite <- combine_to_env_lookup in Hz.
+      apply combine_binds_only_tvar in Hz as Hz''.
+      destruct Hz'' as [ZZ HZZ]. inv HZZ.
+      rewrite Hz.
+      rewrite combine_to_env_lookup in Hz',Hz.
+      apply lookup_in in Hz',Hz.
+      rewrite combine_map_r, in_map_iff in Hz',Hz.
+      destruct Hz' as ((? & ?) & HeqTZ' & Hinxszs);
+        destruct Hz as ((? & ?) & HeqYYZZ & Hinyszs);
+        simpl in *. inv HeqTZ'; inv HeqYYZZ.
+      eauto using nodup_triple_eq_r.
+    - rewrite combine_to_env_lookup in Heqy.
+      apply lookup_not_in_domain in Heqy as Hnindomxs.
+      rewrite combine_map_fst,map_length,
+      <- Hxyl,Nat.min_id,firstn_all in Hnindomxs.
+      assert (Hnindomxszs: T ∉ map fst (combine XS (map TVar ZS))).
+      { rewrite combine_map_fst,map_length.
+        replace (length ZS) with (length XS) by lia.
+        rewrite Nat.min_id, firstn_all; assumption. }
+      apply not_in_domain_lookup in Hnindomxszs.
+      rewrite combine_to_env_lookup at 1.
+      rewrite Hnindomxszs.
+      destruct (~[YS ⟼ map TVar ZS]~ T) as [z |] eqn:Heqz;
       try apply combine_binds_only_tvar in Heqz as HOT;
-      try destruct HOT as [ZZ HZZ]; subst; simpl in *.
-      + admit.
-      + admit.
-    - admit.
-  Abort.
+      try destruct HOT as [ZZ HZZ]; subst; simpl in *; auto.
+      exfalso.
+      repeat rewrite Forall_forall in *.
+      rewrite combine_to_env_lookup in Heqz.
+      apply lookup_in in Heqz.
+      rewrite combine_map_r, in_map_iff in Heqz.
+      destruct Heqz as ((? & ?) & HTZZ & Hinyszs); simpl in *; inv HTZZ.
+      apply in_combine_l, Hxys in Hinyszs.
+      rewrite <- Not_In_member_iff in Hnindomxs.
+      rewrite Hnindomxs in Hinyszs; simpl in *.
+      intuition.
+  Qed.
+
+  Local Hint Resolve tsub_tvars_tvar_compose : core.
   
   Lemma tvars_tsub_compose : forall t XS YS ZS,
       NoDup XS -> NoDup YS -> NoDup ZS ->
@@ -295,25 +338,25 @@ Section Alpha.
   Proof.
     intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
       intros XS YS ZS Hndx Hndy Hndz Hxyl Hyzl Hxys Hyzs;
-      try (simpl in *; auto; assumption).
-    - simpl in *.
-      rewrite difference_app_l in Hxys, Hyzs.
-      enough (Forall (fun Y => Y ∉ tvars t1 ∖ XS) YS /\
-              Forall (fun Y => Y ∉ tvars t2 ∖ XS) YS /\
-              Forall
-                (fun Z =>
-                   Z ∉ tvars (~[ XS ⟼ map TVar YS ]~ † t1) ∖ YS) ZS /\
-              Forall
-                (fun Z =>
-                   Z ∉ tvars (~[ XS ⟼ map TVar YS ]~ † t2) ∖ YS) ZS).
-      rewrite IHt1 with (YS := YS), IHt2 with (YS := YS); intuition.
-      repeat rewrite Forall_forall in *.
-      repeat split; intros W Hws Hwd;
-        try apply Hxys in Hws;
-        try apply Hyzs in Hws;
-        rewrite in_app_iff in Hws; auto.
-    -
-  Abort.
+      simpl in *; auto.
+    rewrite difference_app_l in Hxys, Hyzs.
+    enough (Forall (fun Y => Y ∉ tvars t1 ∖ XS) YS /\
+            Forall (fun Y => Y ∉ tvars t2 ∖ XS) YS /\
+            Forall
+              (fun Z =>
+                 Z ∉ tvars (~[ XS ⟼ map TVar YS ]~ † t1) ∖ YS) ZS /\
+            Forall
+              (fun Z =>
+                 Z ∉ tvars (~[ XS ⟼ map TVar YS ]~ † t2) ∖ YS) ZS).
+    rewrite IHt1 with (YS := YS), IHt2 with (YS := YS); intuition.
+    repeat rewrite Forall_forall in *.
+    repeat split; intros W Hws Hwd;
+      try apply Hxys in Hws;
+      try apply Hyzs in Hws;
+      rewrite in_app_iff in Hws; auto.
+  Qed.
+
+  Local Hint Resolve tvars_tsub_compose : core.
   Local Hint Unfold Transitive : core.
   
   Lemma alpha_transitive : Transitive alpha.
@@ -321,14 +364,17 @@ Section Alpha.
     autounfold with *;
       intros [XS x] [YS y] [ZS z]
              (Hxylen & Hfays & Hy) (Hyzlen & Hfazs & Hz).
-    subst y; subst z. repeat split; try lia.
-    - rewrite Forall_forall in *; simpl in *.
-      intros Z Hzzs Hzd.
-      pose proof Hfazs _ Hzzs as Hz'; clear Hfazs. admit.
-    - simpl in *.
-      rewrite tsub_assoc. f_equal.
-      unfold combine_to_env, to_env, "‡".
-      extensionality W.
+    subst y; subst z; simpl in *.
+    rewrite <- diff_uniques with (r := XS).
+    rewrite <- diff_uniques with (r := XS) in Hfays.
+    rewrite <- diff_uniques with (r := YS) in Hfazs.
+    rewrite <- uniques_Forall with (l := ZS).
+    rewrite <- uniques_Forall with (l := YS) in Hfays.
+    rewrite <- uniques_Forall with (l := ZS) in Hfazs.
+    repeat split; try lia; auto.
+    rewrite Forall_forall in *; simpl in *.
+    intros Z Hzzs Hzd.
+    pose proof Hfazs _ Hzzs as Hz'; clear Hfazs. admit.
   Abort.
 End Alpha.
 

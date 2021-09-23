@@ -257,6 +257,46 @@ Section Env.
     dispatch_eqdec; try discriminate; firstorder.
   Qed.
 
+  Lemma not_in_domain_lookup : forall (l : list (K * V)) k,
+      ~ In k (map fst l) -> lookup k l = None.
+  Proof.
+    intros l; induction l as [| [k v] l IHl];
+      intros ky Hnin; simpl in *; auto.
+    apply Decidable.not_or in Hnin as [Hkky Hnin].
+    dispatch_eqdec; auto.
+  Qed.
+
+  Local Hint Resolve lookup_not_in_domain : core.
+  Local Hint Resolve not_in_domain_lookup : core.
+
+  Lemma lookup_none_iff : forall (l : list (K * V)) k,
+      lookup k l = None <-> ~ In k (map fst l).
+  Proof.
+    firstorder.
+  Qed.
+  
+  Lemma lookup_in_domain : forall l (k : K) (v : V),
+      lookup k l = Some v -> In k (map fst l).
+  Proof.
+    intros l k v Hkl.
+    rewrite lookup_lookup' in Hkl.
+    unfold lookup' in Hkl; maybe_simpl_hyp Hkl.
+    destruct (index_of k (map fst l))
+      as [n |] eqn:Heqn; try discriminate.
+    eauto using index_of_in.
+  Qed.
+
+  Lemma lookup_in_image : forall l (k : K) (v : V),
+      lookup k l = Some v -> In v (map snd l).
+  Proof.
+    intros l k v Hklv.
+    rewrite lookup_lookup' in Hklv.
+    unfold lookup' in Hklv; maybe_simpl_hyp Hklv.
+    destruct (index_of k (map fst l))
+      as [n |] eqn:Heqn; try discriminate.
+    eauto using nth_error_In.
+  Qed.
+
   Lemma in_domain_lookup : forall l (k : K),
       In k (map fst l) -> exists v : V, lookup k l = Some v.
   Proof.
@@ -306,5 +346,19 @@ Section Env.
     - apply IHks in Hkv as (ks1 & ks2 & vs1 & vs2 & Hcmb & Hks1).
       exists (k :: ks1), ks2, (v :: vs1), vs2.
       rewrite Hcmb. firstorder.
+  Qed.
+
+  Lemma in_image_lookup : forall l (v : V),
+      NoDup (map fst l) ->
+      In v (map snd l) ->
+      exists (k : K), lookup k l = Some v.
+  Proof.
+    intro l; induction l as [| [hk hv] l IHl];
+      intros v Hnd Hin; inv Hnd; simpl in *; try contradiction.
+    destruct Hin as [? | Hin]; subst.
+    - exists hk; dispatch_eqdec; reflexivity.
+    - pose proof IHl _ H2 Hin as [k' IH]; clear IHl.
+      exists k'; dispatch_eqdec; auto.
+      apply lookup_in_domain in IH. contradiction.
   Qed.
 End Env.
