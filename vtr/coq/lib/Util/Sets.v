@@ -61,7 +61,36 @@ Section SetEquiv.
     autounfold with core; intuition.
   Qed.
 End SetEquiv.
+
+Section SubsetPO.
+  Context {A : Set}.
+
+  Open Scope set_scope.
+
+  Local Hint Unfold Subset : core.
+  Local Hint Unfold Reflexive : core.
   
+  Lemma Subset_reflexive : Reflexive (@Subset A).
+  Proof.
+    autounfold with *; auto.
+  Qed.
+
+  Local Hint Unfold Transitive : core.
+  
+  Lemma Subset_transitive : Transitive (@Subset A).
+  Proof.
+    autounfold with *; firstorder.
+  Qed.
+
+  Local Hint Unfold set_equiv : core.
+
+  Lemma Subset_antisymmetric : forall l r : list A,
+      l ⊆ r -> r ⊆ l -> l ≡ r.
+  Proof.
+    autounfold with *; firstorder.
+  Qed.
+End SubsetPO.
+
 Section SetDefs.
   Context {A : Set}.
 
@@ -80,6 +109,12 @@ Section SetDefs.
       Permutation r r' ->
       forall l, l ⊆ r -> l ⊆ r'.
   Proof. eauto. Qed.
+
+  Lemma Subset_perm : forall l l' r r' : list A,
+      Permutation l l' -> Permutation r r' -> l ⊆ r -> l' ⊆ r'.
+  Proof.
+    intros l l' r r' Hl Hr; autounfold with *; eauto.
+  Qed.
   
   (** [u] is the union of [l] & [r]. *)
   Definition Union (l r u : list A) : Prop :=
@@ -525,6 +560,29 @@ Section Sets.
   Proof.
     unfold Subset; intros.
     autorewrite with core in *; intuition.
+  Qed.
+
+  Lemma Subset_union : forall l1 l2 r1 r2 : list A,
+      l1 ⊆ r1 -> l2 ⊆ r2 -> l1 ∪ l2 ⊆ r1 ∪ r2.
+  Proof.
+    unfold "⊆"; intros l1 l2 r1 r2 H1 H2 a.
+    autorewrite with core; firstorder.
+  Qed.
+
+  Lemma Subset_extra_l : forall l r : list A,
+      l ∪ l ⊆ r <-> l ⊆ r.
+  Proof.
+    unfold Subset; intros l r; split;
+      intros H a; specialize H with a;
+        autorewrite with core in *; firstorder.
+  Qed.
+
+  Lemma Subset_extra_r : forall l r : list A,
+      l ⊆ r ∪ r <-> l ⊆ r.
+  Proof.
+    unfold Subset; intros l r; split;
+      intros H a; specialize H with a;
+        autorewrite with core in *; firstorder.
   Qed.
   
   Lemma union_perm : forall l r : list A,

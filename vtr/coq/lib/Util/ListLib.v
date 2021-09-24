@@ -696,3 +696,136 @@ Section CuttingMap.
       intros [| a l]; simpl in *; f_equal; auto.
   Qed.
 End CuttingMap.
+
+Section FilterMap.
+  Context {A B : Set}.
+
+  Section FM.
+    Variable (f : A -> option B).
+
+    Fixpoint filtermap (l : list A) : list B :=
+      match l with
+      | []    => []
+      | a :: l => match f a with
+                | Some b => [b]
+                | None   => []
+                end ++ filtermap l
+      end.
+
+    Lemma filtermap_app : forall l1 l2,
+        filtermap (l1 ++ l2) = filtermap l1 ++ filtermap l2.
+    Proof.
+      intro l1; induction l1 as [| a l1 IHl1]; intro l2; simpl; auto.
+      rewrite <- app_assoc, <- IHl1; f_equal.
+    Qed.
+
+    Lemma filtermap_fold_right : forall l,
+        filtermap l =
+        fold_right
+          (fun a acc =>
+             match f a with
+             | Some b => [b]
+             | None   => []
+             end ++ acc) [] l.
+    Proof.
+      intro l; induction l as [| a l IHl]; simpl; auto.
+    Qed.
+
+    Lemma in_filtermap : forall l a b,
+        f a = Some b -> In a l -> In b (filtermap l).
+    Proof.
+      intro l; induction l as [| h l IHl];
+        intros a b Hfab Hin; simpl in *;
+          try contradiction.
+      rewrite in_app_iff.
+      destruct Hin as [? | Hin]; subst;
+        try rewrite Hfab; simpl; firstorder.
+    Qed.
+
+    Fixpoint separate (l : list A) : list A * list B :=
+      match l with
+      | []    => ([], [])
+      | a :: l =>
+        let (la,lb) := separate l in
+        match f a with
+        | Some b => (la, b :: lb)
+        | None   => (a :: la, lb)
+        end
+      end.
+
+    Lemma separate_filtermap : forall l,
+        snd (separate l) = filtermap l.
+    Proof.
+      intro l; induction l as [| a l IHl]; simpl; auto.
+      destruct (separate l) as [us vs] eqn:Huvs;
+        destruct (f a) as [b |] eqn:Hfabeq;
+        simpl in *; f_equal; auto.
+    Qed.
+
+    Lemma in_snd_separate : forall l a b,
+        f a = Some b -> In a l -> In b (snd (separate l)).
+    Proof.
+      intros l a b.
+      rewrite separate_filtermap.
+      eauto using in_filtermap.
+    Qed.
+
+    Lemma in_fst_separate : forall l a,
+        f a = None -> In a l -> In a (fst (separate l)).
+    Proof.
+      intro l; induction l as [| h l IHl];
+        intros a Hfa Hin; simpl in *; try contradiction.
+      specialize IHl with a.
+      destruct (separate l) as [la lb] eqn:Hsep.
+      destruct (f h) as [b |] eqn:Hfh;
+        destruct Hin as [? | Hin]; subst; simpl in *; intuition.
+      rewrite Hfa in Hfh; discriminate.
+    Qed.
+
+    Lemma in_fst_separate_in_orig : forall l a,
+        In a (fst (separate l)) -> In a l.
+    Proof.
+      intro l; induction l as [| h l IHl];
+        intros a Hin; simpl in *; auto.
+      destruct (separate l) as [la lb] eqn:Hsep; simpl in *.
+      destruct (f h) as [b |] eqn:Hfhb; simpl in *;
+        intuition.
+    Qed.
+
+    Lemma not_in_fst_separate : forall l a b,
+        f a = Some b -> In a l -> ~ In a (fst (separate l)).
+    Proof.
+      intro l; induction l as [| h l IHl];
+        intros a b Hfab Hal Hafsl; simpl in *; auto.
+      destruct (separate l) as [la lb] eqn:Hsep.
+      destruct (f h) as [bh |] eqn:Hfhb; simpl in *;
+        destruct Hal as [? | Hal]; subst.
+      - rewrite Hfab in Hfhb; inv Hfhb.
+        assert (Hal: In a l).
+        { replace la with (fst (separate l)) in Hafsl.
+          - auto using in_fst_separate_in_orig.
+          - rewrite Hsep; reflexivity. }
+        firstorder.
+      - firstorder.
+      - rewrite Hfab in Hfhb; discriminate.
+      - destruct Hafsl as [? | Hala]; subst; firstorder.
+        rewrite Hfab in Hfhb; discriminate.
+    Qed.
+
+    Lemma separate_app : forall l1 l2,
+        separate (l1 ++ l2) =
+        let (us1, bs1) := separate l1 in
+        let (us2, bs2) := separate l2 in
+        (us1 ++ us2, bs1 ++ bs2).
+    Proof.
+      intro l1; induction l1 as [| a l1 IHl1]; intro l2; simpl.
+      - destruct (separate l2); auto.
+      - specialize IHl1 with l2;
+          destruct (separate (l1 ++ l2)) as [us bs] eqn:Heql;
+          destruct (separate l1) as [us1 bs1] eqn:Heql1;
+          destruct (separate l2) as [us2 bs2] eqn:Heql2;
+          inv IHl1; destruct (f a) as [b |] eqn:Heqfab;
+            simpl in *; repeat f_equal.
+    Qed.
+  End FM.
+End FilterMap.

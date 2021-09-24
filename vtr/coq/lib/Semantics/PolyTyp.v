@@ -74,20 +74,11 @@ Section Alpha.
   Lemma ptvars_same_Forall : forall XS x,
       Forall (fun Y : nat => Y ∉ ptvars (∀ XS, x)) XS.
   Proof.
-    simpl; intro XS; induction XS as [| X XS IHXS];
-      intro x; simpl in *; auto.
-    constructor; simpl.
-    - pose proof difference_Difference (tvars x) (X :: XS) as Hd.
-      unfold Difference in Hd.
-      intros H. firstorder.
-    - rewrite Forall_forall.
-      intros n HnXS Hin.
-      specialize IHXS with x.
-      rewrite Forall_forall in IHXS.
-      specialize IHXS with n.
-      apply IHXS in HnXS.
-      rewrite remove_diff_cons in Hin.
-      apply remove_sound in Hin. contradiction.
+    intros XS x. rewrite Forall_forall.
+    intros X Hxxs Hxptv; simpl in *.
+    pose proof difference_Difference (tvars x) XS as Hd.
+    unfold Difference in Hd.
+    rewrite Hd in Hxptv. firstorder.
   Qed.
 
   Local Hint Resolve ptvars_same_Forall : core.
@@ -100,6 +91,68 @@ Section Alpha.
     autounfold with alphadb; intros [XS x]; firstorder.
   Qed.
 
+  Lemma typ_in_tvars_subset : forall t ts,
+      t ∈ ts -> tvars t ⊆ flat_map tvars ts.
+  Proof.
+    intros t ts Htts T HT.
+    apply in_split in Htts as (ts1 & ts2 & Hts); subst.
+    rewrite flat_map_app, in_app_iff; simpl.
+    intuition.
+  Qed.
+
+  Lemma tvars_combine_to_env_equiv : forall t TS ts,
+      tvars (~[TS ⟼  ts]~ † t) ≡
+            let (TS',ts') := separate ~[TS ⟼  ts]~ (tvars t) in
+            TS' ∪ flat_map tvars ts'.
+  Proof.
+    unfold "≡".
+    intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
+      intros TS ts; simpl in *.
+    - firstorder.
+    - firstorder.
+    - rewrite separate_app.
+      specialize IHt1 with TS ts; destruct IHt1 as [IH1l IH1r].
+      specialize IHt2 with TS ts; destruct IHt2 as [IH2l IH2r].
+      destruct (separate ~[ TS ⟼ ts ]~ (tvars t1)) as [TS1' ts1'] eqn:Hsep1.
+      destruct (separate ~[ TS ⟼ ts ]~ (tvars t2)) as [TS2' ts2'] eqn:Hsep2.
+      rewrite flat_map_app.
+      split; [clear IH1r IH2r | clear IH1l IH2l].
+      + intros X. repeat rewrite in_app_iff.
+        intros [HX | HX];
+          try apply IH1l in HX; try apply IH2l in HX;
+            repeat rewrite in_app_iff in HX; intuition.
+      + intros X; pose proof IH1r X as IH1;
+          pose proof IH2r X as IH2; clear IH1r IH2r.
+        repeat rewrite in_app_iff in *.
+        intuition.
+    - destruct (~[ TS ⟼ ts ]~ T) as [t |] eqn:Heqt; simpl.
+      + rewrite app_nil_r. firstorder.
+      + firstorder.
+  Qed.
+
+  Lemma tsub_tvars_subset : forall t XS YS,
+      flat_map tvars (filtermap ~[XS ⟼  map TVar YS]~ (tvars t)) ⊆ YS.
+  Proof.
+    intro t; induction t as [| | t1 IHt1 t2 IHt2 | T];
+      intros XS YS; simpl in *.
+    - firstorder.
+    - firstorder.
+    - rewrite filtermap_app, flat_map_app.
+      rewrite <- Subset_extra_r.
+      eauto using Subset_union.
+    - rewrite app_nil_r.
+      destruct (~[ XS ⟼ map TVar YS ]~ T) as [y |] eqn:Hy;
+        try apply combine_binds_only_tvar in Hy as Hy';
+        try destruct Hy' as [Y HY]; subst; simpl in *.
+      + rewrite combine_to_env_lookup in Hy.
+        apply lookup_in, in_combine_r in Hy.
+        rewrite in_map_iff in Hy.
+        destruct Hy as (? & HxY & HYYS); inv HxY.
+        intros X HX; simpl in *.
+        destruct HX; subst; try contradiction; auto.
+      + firstorder.
+  Qed.
+  
   Lemma not_in_free_vars_sym : forall x XS YS,
       length XS = length YS ->
       Forall (fun Y : nat => Y ∉ tvars x ∖ XS) YS ->
@@ -107,46 +160,33 @@ Section Alpha.
         (fun Y : nat =>
            Y ∉ tvars (~[ XS ⟼ map TVar YS ]~ † x) ∖ YS) XS.
   Proof.
-    intros t XS YS.
+    intros t XS YS Hxyl.
     repeat rewrite Forall_forall.
-    generalize dependent YS;
-      generalize dependent XS.
-    induction t as [| | t1 IHt1 t2 IHt2 | T];
-      intros XS YS Hlen Hys X Hxs Hx; cbn in *; auto.
-    - rewrite difference_app_l in Hys, Hx.
-      rewrite in_app_iff in Hx.
-      specialize IHt1 with XS YS X;
-        specialize IHt2 with XS YS X.
-      destruct Hx as [Ht1 | Ht2];
-        [apply IHt1 in Ht1 | apply IHt2 in Ht2];
-        clear IHt1 IHt2; auto;
-          intros Z Hzys HZ; apply Hys in Hzys;
-            rewrite in_app_iff in Hzys; auto.
-    - rewrite app_nil_r in Hys.
-      destruct (~[ XS ⟼ map TVar YS ]~ T)
-        as [z |] eqn:Hz;
-        try apply combine_binds_only_tvar in Hz as Hz';
-        try destruct Hz' as [Z HZ]; subst; simpl in *.
-      + rewrite app_nil_r in Hx.
-        pose proof In_member_reflects Z YS as Hzys;
-          inversion Hzys as [Hin Hmem | Hin Hmem]; clear Hzys;
-            rewrite <- Hmem in Hx; simpl in *; try contradiction;
-              destruct Hx; subst; try contradiction.
-        rewrite combine_to_env_lookup in Hz.
-        apply lookup_in in Hz.
-        apply in_combine_r in Hz.
-        rewrite in_map_iff in Hz.
-        destruct Hz as (X' & HX' & Hinx); inv HX';
-          contradiction.
-      + pose proof In_member_reflects T YS as Htys;
-          inversion Htys as [Hin Hmem | Hin Hmem]; clear Htys;
-            rewrite <- Hmem in Hx; simpl in *; try contradiction;
-              destruct Hx; subst; try contradiction.
-        rewrite combine_to_env_lookup in Hz.
-        apply lookup_not_in_domain in Hz.
-        rewrite combine_map_fst, map_length,
-        <- Hlen, Nat.min_id, firstn_all in Hz.
-        contradiction.
+    intros Hff X Hxxs Hys.
+    pose proof difference_Difference
+         (tvars (~[ XS ⟼ map TVar YS ]~ † t)) YS as Hd.
+    unfold Difference in Hd; rewrite Hd in Hys; clear Hd.
+    destruct Hys as [Ht Hxys].
+    apply tvars_combine_to_env_equiv in Ht.
+    destruct (separate ~[ XS ⟼ map TVar YS ]~ (tvars t))
+      as [XS' ys'] eqn:Hsep.
+    assert (HXXS : exists y, ~[XS ⟼  map TVar YS]~ X = Some y).
+    { rewrite combine_to_env_lookup.
+      apply in_domain_lookup.
+      rewrite combine_map_fst, map_length,
+      <- Hxyl, Nat.min_id, firstn_all; assumption. }
+    destruct HXXS as [y Hy];
+      apply combine_binds_only_tvar in Hy as Hy';
+      destruct Hy' as [Y HY]; subst.
+    rewrite in_app_iff in Ht. destruct Ht as [Ht | Ht].
+    - pose proof in_dec Nat.eq_dec X (tvars t) as [HXt | HXt].
+      + pose proof not_in_fst_separate _ _ _ _ Hy HXt as Hnifs.
+        rewrite Hsep in Hnifs; simpl in *. contradiction.
+      + apply f_equal with (f := fst) in Hsep; simpl in *; subst XS'.
+        apply in_fst_separate_in_orig in Ht; contradiction.
+    - apply f_equal with (f := snd) in Hsep; simpl in *.
+      rewrite separate_filtermap in Hsep; subst ys'.
+      apply tsub_tvars_subset in Ht. contradiction.
   Qed.
 
   Lemma tvars_tsub_tvar_involutive : forall XS YS T,
@@ -240,6 +280,50 @@ Section Alpha.
     repeat split; simpl in *; auto.
   Qed.
 
+  Lemma not_in_free_vars_trans : forall t XS YS ZS,
+      length XS = length YS -> length YS = length ZS ->
+      Forall (fun Y => Y ∉ tvars t ∖ XS) YS ->
+      Forall
+        (fun Z =>
+           Z ∉ tvars (~[XS ⟼  map TVar YS]~ † t) ∖ YS) ZS ->
+      Forall (fun Z => Z ∉ tvars t ∖ XS) ZS.
+  Proof.
+    intros t XS YS ZS Hxyl Hyzl Hfaxsys Hfayszs.
+    rewrite Forall_forall in *.
+    intros Z Hzzs Hzd.
+    pose proof difference_Difference (tvars t) XS as Hd.
+    unfold Difference in Hd; rewrite Hd in Hzd; clear Hd.
+    destruct Hzd as [Hzt Hzxs].
+    apply Hfayszs in Hzzs as Hz'.
+    pose proof tvars_combine_to_env_equiv t XS (map TVar YS) as Heqv.
+    destruct (separate ~[ XS ⟼ map TVar YS ]~ (tvars t)) as [XS' ys'] eqn:Hsepxy.
+    assert (Hzxsnone : ~[ XS ⟼ map TVar YS ]~ Z = None).
+    { rewrite combine_to_env_lookup.
+      apply not_in_domain_lookup.
+      rewrite combine_map_fst, map_length,
+      <- Hxyl, Nat.min_id, firstn_all; assumption. }
+    pose proof in_fst_separate _ _ _ Hzxsnone Hzt as Hzinfs.
+    pose proof difference_Difference
+         (tvars (~[ XS ⟼ map TVar YS ]~ † t)) YS as Hd.
+    unfold Difference in Hd; rewrite Hd in Hz'; clear Hd.
+    apply Decidable.not_and in Hz' as [Hz' | Hz'].
+    - apply Hz'. destruct Heqv as [_ Heqvr].
+      apply Heqvr. rewrite in_app_iff.
+      apply f_equal with (f:=fst) in Hsepxy.
+      simpl in *; subst XS'; auto.
+    - apply Decidable.not_not in Hz'.
+      + apply Hfaxsys in Hz' as Hztxs.
+        apply Hztxs.
+        pose proof difference_Difference (tvars t) XS as Hd.
+        unfold Difference in Hd; rewrite Hd.
+        intuition.
+      + unfold Decidable.decidable.
+        pose proof in_dec Nat.eq_dec Z YS; intuition.
+    - unfold Decidable.decidable.
+      pose proof in_dec Nat.eq_dec Z
+           (tvars (~[ XS ⟼ map TVar YS ]~ † t)); intuition.
+  Qed.
+  
   Lemma tsub_tvars_tvar_compose : forall XS YS ZS T,
       NoDup XS -> NoDup YS -> NoDup ZS ->
       length XS = length YS -> length YS = length ZS ->
@@ -356,12 +440,13 @@ Section Alpha.
       rewrite in_app_iff in Hws; auto.
   Qed.
 
+  Local Hint Resolve not_in_free_vars_trans : core.
   Local Hint Resolve tvars_tsub_compose : core.
   Local Hint Unfold Transitive : core.
   
   Lemma alpha_transitive : Transitive alpha.
   Proof.
-    autounfold with *;
+    autounfold with alphadb;
       intros [XS x] [YS y] [ZS z]
              (Hxylen & Hfays & Hy) (Hyzlen & Hfazs & Hz).
     subst y; subst z; simpl in *.
@@ -371,11 +456,16 @@ Section Alpha.
     rewrite <- uniques_Forall with (l := ZS).
     rewrite <- uniques_Forall with (l := YS) in Hfays.
     rewrite <- uniques_Forall with (l := ZS) in Hfazs.
-    repeat split; try lia; auto.
-    rewrite Forall_forall in *; simpl in *.
-    intros Z Hzzs Hzd.
-    pose proof Hfazs _ Hzzs as Hz'; clear Hfazs. admit.
-  Abort.
+    repeat split; eauto; try lia.
+  Qed.
+
+  Local Hint Resolve alpha_reflexive : core.
+  Local Hint Resolve alpha_symmetric : core.
+  Local Hint Resolve alpha_transitive : core.
+  Local Hint Constructors Equivalence : core.
+
+  Global Instance AlphaEquiv : Equivalence alpha.
+  Proof. auto. Defined.
 End Alpha.
 
 Reserved Notation "g ⫢ e ∴ p"
