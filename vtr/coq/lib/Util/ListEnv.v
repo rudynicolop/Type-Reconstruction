@@ -126,6 +126,44 @@ Notation "'~[' ks ⟼  vs ']~'"
   := (combine_to_env ks vs)
        (at level 4, no associativity) : env_scope.
 
+Section Equiv.
+  Context {K V : Set} {HEDK : EqDec K eq}.
+  
+  Local Hint Unfold eql : core.
+  Local Hint Unfold Reflexive : core.
+
+  Notation eqll := (@eql _ V HEDK).
+
+  Lemma eql_reflexive : Reflexive eqll.
+  Proof.
+    autounfold with *; reflexivity.
+  Qed.
+
+  Local Hint Unfold Symmetric : core.
+
+  Lemma eql_symmetric : Symmetric eqll.
+  Proof.
+    autounfold with *; auto.
+  Qed.
+
+  Local Hint Unfold Transitive : core.
+
+  Lemma eql_transitive : Transitive eqll.
+  Proof.
+    autounfold with *; etransitivity; eauto.
+  Qed.
+
+  Local Hint Resolve eql_reflexive : core.
+  Local Hint Resolve eql_transitive : core.
+  Local Hint Resolve eql_symmetric : core.
+  Local Hint Constructors Equivalence : core.
+
+  Global Instance EqlEquiv : Equivalence eqll.
+  Proof.
+    auto.
+  Qed.
+End Equiv.
+
 Section Map.
   Context {A B : Set}.
   Variable (f : A -> B).

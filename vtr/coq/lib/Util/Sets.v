@@ -60,6 +60,16 @@ Section SetEquiv.
   Proof.
     autounfold with core; intuition.
   Qed.
+
+  Local Hint Resolve set_equiv_Reflexive : core.
+  Local Hint Resolve set_equiv_Symmetric : core.
+  Local Hint Resolve set_equiv_Transitive : core.
+  Local Hint Constructors Equivalence : core.
+  
+  Global Instance SetEquiv : Equivalence (@set_equiv A).
+  Proof.
+    auto.
+  Qed.
 End SetEquiv.
 
 Section SubsetPO.

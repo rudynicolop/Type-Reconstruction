@@ -1,10 +1,8 @@
-Require Export CoqRecon.Util.ListEnv CoqRecon.Semantics.DeclTyping.
+Require Export CoqRecon.Util.ListEnv CoqRecon.Semantics.TypEnv.
 
 (** Poly-types/type-schemes. *)
 Record poly : Set :=
   { pvars : list nat; ptyp : typ }.
-
-Definition pgamma : Set := list (string * poly).
 
 Declare Scope poly_scope.
 Delimit Scope poly_scope with poly.
@@ -17,9 +15,6 @@ Open Scope poly_scope.
 Open Scope set_scope.
 
 Definition ptvars '(∀ TS, t : poly) : list nat := tvars t ∖ TS.
-
-Definition ftv : pgamma -> list nat :=
-  fold_right (fun '(x,p) => app (ptvars p)) [].
 
 Definition pnv (t : typ) : poly :=
   {| pvars := []; ptyp := t |}.
@@ -468,43 +463,77 @@ Section Alpha.
   Proof. auto. Defined.
 End Alpha.
 
-Reserved Notation "g ⫢ e ∴ p"
-         (at level 70, no associativity).
+(** Decidable alpha equivalence. *)
+Definition alphab '((∀ XS, x) as p : poly) '(∀ YS, y : poly) : bool :=
+  let xs := uniques XS in
+  let ys := uniques YS in
+  (length xs =? length ys) && 
+  forallb (fun Y => negb (member Y (ptvars p))) YS &&
+  typ_eq (~[uniques XS ⟼  map TVar (uniques YS)]~ † x) y.
 
-Open Scope term_scope.
+Section Alphab.
 
-(** Damas Milner Declarative-typing system. *)
-Inductive DM (Γ : pgamma) : term -> poly -> Prop :=
-| DM_var x p :
-    lookup x Γ = Some p ->
-    Γ ⫢ x ∴ p
-| DM_abs x e (τ τ' : typ) :
-    ((x, pnv τ) :: Γ) ⫢ e ∴ τ' ->
-    Γ ⫢ λ x ⇒ e ∴ τ → τ'
-| DM_app e1 e2 (τ τ' : typ) :
-    Γ ⫢ e1 ∴ τ → τ' ->
-    Γ ⫢ e2 ∴ τ ->
-    Γ ⫢ e1 ⋅ e2 ∴ τ'
-| DM_let x e1 e2 p (τ : typ) :
-    Γ ⫢ e1 ∴ p ->
-    ((x, p) :: Γ) ⫢ e2 ∴ τ ->
-    Γ ⫢ LetIn x e1 e2 ∴ τ
-| DM_gen e XS (τ : typ) :
-    Disjoint XS (ftv Γ) ->
-    Γ ⫢ e ∴ τ ->
-    Γ ⫢ e ∴ ∀ XS, τ
-| DM_inst e (τ : typ) XS TS :
-    Γ ⫢ e ∴ (∀ XS, τ) ->
-    Γ ⫢ e ∴ ~[ XS ⟼  TS ]~ † τ
-| DM_cond e1 e2 e3 p p' :
-    p ≂ p' ->
-    Γ ⫢ e1 ∴ TBool ->
-    Γ ⫢ e2 ∴ p ->
-    Γ ⫢ e3 ∴ p' ->
-    Γ ⫢ Cond e1 e2 e3 ∴ p
-| DM_op o e1 e2 τ τ' :
-    op_typs o τ τ' ->
-    Γ ⫢ e1 ∴ τ ->
-    Γ ⫢ e2 ∴ τ ->
-    Γ ⫢ Op o e1 e2 ∴ τ'
-where "g ⫢ e ∴ p" := (DM g e p) : type_scope.
+  Local Hint Unfold alphab : alphadb.
+  
+  Lemma alpha_alphab : forall px py,
+      px ≂ py -> alphab px py = true.
+  Proof.
+    autounfold with *;
+      intros [XS x] [YS y] (Hl & Hfa & Hteq).
+    repeat rewrite andb_true_iff.
+    repeat split.
+    - rewrite Hl; apply Nat.eqb_refl.
+    - rewrite forallb_forall.
+      rewrite Forall_forall in Hfa.
+      intros Y Hyys.
+      apply Hfa in Hyys.
+      rewrite <- Not_In_member_iff in Hyys.
+      rewrite Hyys. reflexivity.
+    - rewrite typ_eq_iff; assumption.
+  Qed.
+
+  Local Hint Resolve EqNat.beq_nat_true : core.
+  Local Hint Resolve typ_eq_eq : core.
+  
+  Lemma alphab_alpha : forall px py,
+      alphab px py = true -> px ≂ py.
+  Proof.
+    unfold alphab, "≂"; intros [XS x] [YS y] H.
+    repeat rewrite andb_true_iff in H.
+    destruct H as [[Hl Hfa] Hxy].
+    repeat split; auto.
+    rewrite Forall_forall.
+    rewrite forallb_forall in Hfa.
+    intros Y Hyys. apply Hfa in Hyys.
+    rewrite negb_true_iff, Not_In_member_iff in Hyys.
+    assumption.
+  Qed.
+
+  Local Hint Resolve alpha_alphab : core.
+  Local Hint Resolve alphab_alpha : core.
+
+  Lemma alphab_true_iff : forall px py,
+      alphab px py = true <-> px ≂ py.
+  Proof.
+    intuition.
+  Qed.
+
+  Local Hint Constructors reflect : core.
+
+  Lemma alphab_reflects : reflects alpha alphab.
+  Proof.
+    intros px py.
+    destruct (alphab px py) eqn:Hab; auto.
+    constructor. rewrite <- alphab_true_iff, Hab.
+    discriminate.
+  Qed.
+
+  Lemma alphab_false_iff : forall px py,
+      alphab px py = false <-> ~ px ≂ py.
+  Proof.
+    intros px py; split; intros H.
+    - rewrite <- alphab_true_iff, H; discriminate.
+    - pose proof alphab_reflects px py as Hxy;
+        inv Hxy; intuition.
+  Qed.
+End Alphab.
