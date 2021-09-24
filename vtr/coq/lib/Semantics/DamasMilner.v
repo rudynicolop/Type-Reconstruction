@@ -5,6 +5,25 @@ Definition pgamma : Set := list (string * poly).
 Definition ftv : pgamma -> list nat :=
   fold_right (fun '(x,p) => app (ptvars p)) [].
 
+Section FtvProp.
+  Local Hint Resolve eql_nil : core.
+  
+  Lemma eql_ftv_set_equiv : forall g g',
+    g ≊ g' -> ftv g ≡ ftv g'.
+  Proof.
+    intro g; induction g as [| [x [TS t]] g IHg];
+      intros [| [x' [TS' t']] g'] H; simpl in *.
+    - reflexivity.
+    - apply eql_nil in H; discriminate.
+    - symmetry in H.
+      apply eql_nil in H; discriminate.
+    - eqdec x x'.
+      + unfold eql in H; specialize H with x'; simpl in H.
+        dispatch_eqdec. inv H.
+        Search (_ ≡ _).
+  Abort.
+End FtvProp.
+
 Reserved Notation "g ⫢ e ∴ p"
          (at level 70, no associativity).
 
@@ -45,3 +64,23 @@ Inductive DM (Γ : pgamma) : term -> poly -> Prop :=
     Γ ⫢ e2 ∴ τ ->
     Γ ⫢ Op o e1 e2 ∴ τ'
 where "g ⫢ e ∴ p" := (DM g e p) : type_scope.
+
+Section DM.
+  Local Hint Constructors DM : core.
+  Local Hint Resolve eql_cons : core.
+
+  Lemma pgamma_equiv_DM : forall Γ Γ' e p,
+      Γ ≊ Γ' -> Γ ⫢ e ∴ p -> Γ' ⫢ e ∴ p.
+  Proof.
+    intros g g' e p Hg Hgep.
+    generalize dependent g'.
+    induction Hgep; intros g' Hg; eauto.
+    - rewrite Hg in H; auto.
+    - constructor.
+      unfold Disjoint, Intersection in *; auto.
+      intro T; specialize H with T; simpl in *;
+        split; intro HT; try contradiction.
+      + rewrite H.
+        destruct HT as [HTx HTg']; split; auto.
+  Abort.
+End DM.

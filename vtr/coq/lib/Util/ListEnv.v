@@ -162,6 +162,23 @@ Section Equiv.
   Proof.
     auto.
   Qed.
+
+  Lemma eql_cons : forall (k : K) (v : V) l l',
+      l ≊ l' -> (k,v) :: l ≊ (k,v) :: l'.
+  Proof.
+    unfold eqll; intros k v l l' H ky;
+      simpl; dispatch_eqdec; auto.
+  Qed.
+
+  Lemma eql_nil : forall l : list (K * V),
+      [] ≊ l -> l = [].
+  Proof.
+    unfold "≊".
+    intro l; destruct l as [| [k v]];
+      intro H; try specialize H with k;
+        simpl in *; try dispatch_eqdec;
+          auto; try discriminate.
+  Qed.
 End Equiv.
 
 Section Map.
