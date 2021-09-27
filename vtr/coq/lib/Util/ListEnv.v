@@ -7,7 +7,7 @@ Open Scope maybe_scope.
 
 Section Lookup.
   Context {K V : Set} {HDK : EqDec K eq}.
-
+  
   Fixpoint lookup (k : K) (l : list (K * V)) : option V :=
     match l with
     | []         => None
@@ -416,4 +416,214 @@ Section Env.
       exists k'; dispatch_eqdec; auto.
       apply lookup_in_domain in IH. contradiction.
   Qed.
+
+  Lemma in_lookup_sublist : forall l (k : K) (v : V),
+      In (k,v) l ->
+      exists l1 l2, l = l1 ++ l2 /\ lookup k l2 = Some v.
+  Proof.
+    intro l; induction l as [| [k v] l IHl];
+      intros ky vy Hin; simpl in *; try contradiction.
+    destruct Hin as [Hkv | Hin]; try inv Hkv.
+    - exists [], ((ky,vy) :: l); simpl; dispatch_eqdec; auto.
+    - apply IHl in Hin as (l1 & l2 & Hl & Hsome); subst.
+      exists ((k,v) :: l1), l2; auto.
+  Qed.      
 End Env.
+
+Section NoDup.
+  Context {K V : Set} {HDK : EqDec K eq}.
+
+  Inductive Once : list (K * V) -> Prop :=
+  | once_nil :
+      Once []
+  | once_cons k v l :
+      lookup k l = None ->
+      Once l ->
+      Once ((k,v) :: l).
+
+  Fixpoint uproot (k : K) (l : list (K * V)) : list (K * V) :=
+    match l with
+    | []         => []
+    | (k',v) :: l => (if k == k' then [] else [(k',v)]) ++ uproot k l
+    end.
+
+  Fixpoint collapse (l : list (K * V)) : list (K * V) :=
+    match l with
+    | []        => []
+    | (k,v) :: l => (k,v) :: uproot k (collapse l)
+    end.
+
+  Lemma uproot_idempotent : forall l ky,
+      uproot ky (uproot ky l) = uproot ky l.
+  Proof.
+    intro l; induction l as [| [k v] l IHl];
+      intro ky; simpl; auto.
+    repeat dispatch_eqdec; rewrite IHl; reflexivity.
+  Qed.
+
+  Lemma uproot_comm : forall l k1 k2,
+      uproot k1 (uproot k2 l) = uproot k2 (uproot k1 l).
+  Proof.
+    intro l; induction l as [| [k v] l IHl];
+      intros k1 k2; simpl; auto.
+    repeat dispatch_eqdec; try rewrite IHl; auto.
+  Qed.
+
+  Lemma uproot_collapse_comm : forall l ky,
+      uproot ky (collapse l) = collapse (uproot ky l).
+  Proof.
+    intro l; induction l as [| [k v] l IHl];
+      intro ky; simpl in *; auto.
+    dispatch_eqdec.
+    - rewrite uproot_idempotent, IHl; reflexivity.
+    - rewrite uproot_comm, IHl; reflexivity.
+  Qed.
+
+  Lemma lookup_uproot_same : forall l ky,
+      lookup ky (uproot ky l) = None.
+  Proof.
+    intro l; induction l as [| [k v] l IHl];
+      intro ky; simpl; auto.
+    repeat dispatch_eqdec; auto.
+  Qed.
+
+  Lemma lookup_uproot_diff : forall l k1 k2,
+      k1 <> k2 -> lookup k1 (uproot k2 l) = lookup k1 l.
+  Proof.
+    intro l; induction l as [| [k v] l IHl];
+      intros k1 k2 Hk1k2; simpl; auto.
+    repeat dispatch_eqdec; auto.
+  Qed.
+  
+  Lemma collapse_eql : forall l, collapse l ≊ l.
+  Proof.
+    unfold "≊"; intro l;
+      induction l as [| [hk hv] l IHl];
+      intro k; simpl in *; auto.
+    dispatch_eqdec; auto.
+    rewrite lookup_uproot_diff by assumption; auto.
+  Qed.
+
+  Local Hint Constructors Once : core.
+  Local Hint Resolve lookup_uproot_same : core.
+  (*Local Hint Resolve lookup_uproot_diff : core.*)
+  
+  Lemma Once_uproot : forall l,
+      Once l -> forall ky, Once (uproot ky l).
+  Proof.
+    intros l HO; induction HO as [| k v l Hnone HO IHO];
+      intro ky; simpl; try dispatch_eqdec; auto.
+    constructor; auto.
+    rewrite lookup_uproot_diff by auto; assumption.
+  Qed.
+
+  Local Hint Resolve Once_uproot : core.
+  
+  Lemma Once_collapse : forall l, Once (collapse l).
+  Proof.
+    intro l; induction l as [| [k v] l IHl]; simpl; auto.
+  Qed.
+
+  Local Hint Resolve Permutation_sym : core.
+  Local Hint Resolve Permutation_map : core.
+  Local Hint Resolve Permutation_in : core.
+  
+  Lemma perm_once : forall l l',
+      Permutation l l' -> Once l -> Once l'.
+  Proof.
+    intros l l' Hp Ho;
+      induction Hp as
+        [| [k v] l l' Hp IHp
+         | [k v] [k' v'] l
+         | l l' l'' Hp IHp Hp' IHp'];
+      repeat match goal with
+             | H: Once (_ :: _) |- _ => inv H
+             end; auto.
+    - constructor; auto.
+      rewrite lookup_none_iff in *.
+      firstorder eauto.
+    - simpl in *.
+      dispatch_eqdec; try discriminate.
+      repeat constructor; auto; simpl.
+      dispatch_eqdec; auto.
+  Qed.
+
+  Local Hint Resolve perm_once : core.
+  
+  Lemma perm_eql : forall l l',
+      Permutation l l' -> Once l -> l ≊ l'.
+  Proof.
+    unfold eql; intros l l' Hp Ho;
+      induction Hp as
+        [| [k v] l l' Hp IHp
+         | [k v] [k' v'] l
+         | l l' l'' Hp IHp Hp' IHp'];
+      repeat match goal with
+             | H: Once (_ :: _) |- _ => inv H
+             end; intro ky; simpl in *; auto.
+    - dispatch_eqdec; auto.
+    - repeat dispatch_eqdec; try discriminate; auto.
+    - intuition; etransitivity; eauto.
+  Qed.
+
+  Local Hint Constructors NoDup : core.
+  Local Hint Resolve lookup_not_in : core.
+  
+  Lemma once_nodup : forall l, Once l -> NoDup l.
+  Proof.
+    intros l Ho; induction Ho; eauto.
+  Qed.
+
+  Lemma once_in_lookup : forall l,
+      Once l -> forall k v, In (k, v) l -> lookup k l = Some v.
+  Proof.
+    intros l Ho;
+      induction Ho as [| k v l Hnone Ho IHo];
+      intros ky vy Hin; simpl in *; try contradiction.
+    dispatch_eqdec; destruct Hin as [Hin | Hin];
+      try inv Hin; try contradiction; auto.
+    apply IHo in Hin. rewrite Hnone in Hin. discriminate.
+  Qed.
+
+  Local Hint Resolve lookup_in : core.
+
+  Lemma once_eql_in : forall l l' (k : K) (v : V),
+      Once l -> Once l' -> l ≊ l' -> In (k,v) l -> In (k,v) l'.
+  Proof.
+    unfold eql; intros l l' k v Ho Ho' H Hin.
+    apply once_in_lookup in Hin; auto.
+    rewrite H in Hin; eauto.
+  Qed.
+
+  Local Hint Resolve once_eql_in : core.
+  (*Local Hint Resolve eql_symmetric : core.*)
+
+  Lemma once_eql_in_iff : forall l l',
+      Once l -> Once l' -> l ≊ l' ->
+      forall kv, In kv l <-> In kv l'.
+  Proof.
+    intros l l' Ho Ho' Heql [k v].
+    apply eql_symmetric in Heql as Heql'.
+    firstorder eauto.
+  Qed.
+    
+  Local Hint Resolve once_eql_in_iff : core.
+  Local Hint Resolve once_nodup : core.
+  Local Hint Resolve NoDup_Permutation : core.
+
+  Lemma once_eql_perm : forall l l',
+      Once l -> Once l' -> l ≊ l' -> Permutation l l'.
+  Proof.
+    eauto.
+  Qed.
+
+  Local Hint Resolve perm_eql : core.
+  Local Hint Resolve once_eql_perm : core.
+
+  Lemma eql_perm_iff : forall l l',
+      Once l -> Once l' ->
+      l ≊ l' <-> Permutation l l'.
+  Proof.
+    intuition.
+  Qed.
+End NoDup.

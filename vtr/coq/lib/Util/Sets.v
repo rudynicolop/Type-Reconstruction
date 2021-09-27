@@ -99,6 +99,22 @@ Section SubsetPO.
   Proof.
     autounfold with *; firstorder.
   Qed.
+
+  Lemma Subset_refl : forall l : list A, l ⊆ l.
+  Proof.
+    auto using Subset_reflexive.
+  Qed.
+
+  Lemma Subset_trans : forall l l' l'' : list A,
+      l ⊆ l' -> l' ⊆ l'' -> l ⊆ l''.
+  Proof.
+    auto using Subset_transitive.
+  Qed.
+
+  Lemma Subset_nil : forall l : list A, [] ⊆ l.
+  Proof.
+    intuition.
+  Qed.
 End SubsetPO.
 
 Section SetDefs.

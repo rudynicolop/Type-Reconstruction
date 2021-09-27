@@ -5,23 +5,60 @@ Definition pgamma : Set := list (string * poly).
 Definition ftv : pgamma -> list nat :=
   fold_right (fun '(x,p) => app (ptvars p)) [].
 
+Definition FTV (g : pgamma) : list nat := ftv (collapse g).
+
 Section FtvProp.
-  Local Hint Resolve eql_nil : core.
+  Local Hint Resolve Subset_union_distr_l : core.
+  Local Hint Resolve Subset_union_distr_r : core.
+  Local Hint Resolve Subset_reflexive : core.
+  Local Hint Resolve Subset_perm_l : core.
+  Local Hint Resolve Permutation_app_swap : core.
+  Local Hint Resolve Subset_refl : core.
+  Local Hint Resolve Subset_trans : core.
+  Hint Rewrite app_assoc : core.
   
-  Lemma eql_ftv_set_equiv : forall g g',
-    g ≊ g' -> ftv g ≡ ftv g'.
+  Lemma perm_ftv : forall g g',
+    Permutation g g' -> ftv g ≡ ftv g'.
+  Proof.
+    unfold "≡"; intros g g' Hp;
+      induction Hp
+      as [| [x [US u]] g g' Hgg' [IHgg' IHg'g]
+          | [x [US u]] [y [VS v]] g
+          | g g' g'' Hgg' [IHgg' IHg'g] Hg'g'' [IHg'g'' IHg''g']];
+      simpl in *; autorewrite with core;
+        intuition eauto.
+  Qed.
+  
+  Local Hint Resolve once_eql_perm : core.
+  Local Hint Resolve perm_ftv : core.
+
+  Lemma once_eql_ftv : forall g g',
+      Once g -> Once g' -> g ≊ g' -> ftv g ≡ ftv g'.
+  Proof.
+    eauto.
+  Qed.
+
+  Local Hint Resolve Subset_nil : core.
+  
+  Lemma ftv_uproot_l : forall g x, ftv (uproot x g) ⊆ ftv g.
   Proof.
     intro g; induction g as [| [x [TS t]] g IHg];
-      intros [| [x' [TS' t']] g'] H; simpl in *.
-    - reflexivity.
-    - apply eql_nil in H; discriminate.
-    - symmetry in H.
-      apply eql_nil in H; discriminate.
-    - eqdec x x'.
-      + unfold eql in H; specialize H with x'; simpl in H.
-        dispatch_eqdec. inv H.
-        Search (_ ≡ _).
-  Abort.
+      intro y; simpl in *; auto.
+    dispatch_eqdec; auto.
+    apply (Subset_union []); auto.
+  Qed.
+
+  Local Hint Resolve Once_collapse : core.
+  Local Hint Resolve once_eql_ftv : core.
+  
+  Lemma eql_FTV : forall g g',
+      g ≊ g' -> FTV g ≡ FTV g'.
+  Proof.
+    intros g g' H.
+    rewrite <- collapse_eql with (l := g) in H.
+    rewrite <- collapse_eql with (l := g') in H.
+    unfold FTV; auto.
+  Qed.
 End FtvProp.
 
 Reserved Notation "g ⫢ e ∴ p"
@@ -46,18 +83,17 @@ Inductive DM (Γ : pgamma) : term -> poly -> Prop :=
     ((x, p) :: Γ) ⫢ e2 ∴ τ ->
     Γ ⫢ LetIn x e1 e2 ∴ τ
 | DM_gen e XS (τ : typ) :
-    Disjoint XS (ftv Γ) ->
+    Disjoint XS (FTV Γ) ->
     Γ ⫢ e ∴ τ ->
     Γ ⫢ e ∴ ∀ XS, τ
 | DM_inst e (τ : typ) XS TS :
     Γ ⫢ e ∴ (∀ XS, τ) ->
     Γ ⫢ e ∴ ~[ XS ⟼  TS ]~ † τ
-| DM_cond e1 e2 e3 p p' :
-    p ≂ p' ->
+| DM_cond e1 e2 e3 (τ : typ) :
     Γ ⫢ e1 ∴ TBool ->
-    Γ ⫢ e2 ∴ p ->
-    Γ ⫢ e3 ∴ p' ->
-    Γ ⫢ Cond e1 e2 e3 ∴ p
+    Γ ⫢ e2 ∴ τ ->
+    Γ ⫢ e3 ∴ τ ->
+    Γ ⫢ Cond e1 e2 e3 ∴ τ
 | DM_op o e1 e2 τ τ' :
     op_typs o τ τ' ->
     Γ ⫢ e1 ∴ τ ->
@@ -68,6 +104,7 @@ where "g ⫢ e ∴ p" := (DM g e p) : type_scope.
 Section DM.
   Local Hint Constructors DM : core.
   Local Hint Resolve eql_cons : core.
+  (*Local Hint Resolve eql_FTV : core.*)
 
   Lemma pgamma_equiv_DM : forall Γ Γ' e p,
       Γ ≊ Γ' -> Γ ⫢ e ∴ p -> Γ' ⫢ e ∴ p.
@@ -76,11 +113,12 @@ Section DM.
     generalize dependent g'.
     induction Hgep; intros g' Hg; eauto.
     - rewrite Hg in H; auto.
-    - constructor.
+    - constructor; auto.
       unfold Disjoint, Intersection in *; auto.
       intro T; specialize H with T; simpl in *;
         split; intro HT; try contradiction.
-      + rewrite H.
-        destruct HT as [HTx HTg']; split; auto.
-  Abort.
+      rewrite H.
+      destruct HT as [HTx HTg']; split; auto.
+      pose proof eql_FTV _ _ Hg as [_ ?]; auto.
+  Qed.
 End DM.
