@@ -21,6 +21,10 @@ Definition pnv (t : typ) : poly :=
 
 Coercion pnv : typ >-> poly.
 
+Definition norm '(∀ TS, t : poly) : poly := ∀ uniques TS, t.
+
+Definition normed '(∀ TS, _ : poly) : Prop := NoDup TS.
+
 Definition binds_only_tvar (s : tenv) : Prop :=
   forall X t, s X = Some t -> exists Y, t = TVar Y.
 
@@ -67,7 +71,7 @@ Section Alpha.
   Local Hint Resolve tvars_tsub_same : core.
 
   Lemma ptvars_same_Forall : forall XS x,
-      Forall (fun Y : nat => Y ∉ ptvars (∀ XS, x)) XS.
+      Forall (fun Y : nat => Y ∉ tvars x ∖ XS) XS.
   Proof.
     intros XS x. rewrite Forall_forall.
     intros X Hxxs Hxptv; simpl in *.
@@ -80,6 +84,7 @@ Section Alpha.
   Create HintDb alphadb.
   Local Hint Unfold Reflexive : alphadb.
   Local Hint Unfold alpha : alphadb.
+  Local Hint Unfold ptvars : alphadb.
   
   Lemma alpha_reflexive : Reflexive alpha.
   Proof.
@@ -461,6 +466,26 @@ Section Alpha.
 
   Global Instance AlphaEquiv : Equivalence alpha.
   Proof. auto. Defined.
+
+  Hint Rewrite @uniques_idempotent : core.
+  Hint Rewrite @diff_uniques : core.
+  
+  Lemma alpha_norm : forall p, norm p ≂ p.
+  Proof.
+    autounfold with alphadb; intros [TS t]; simpl;
+      autorewrite with core; auto.
+  Qed.
+
+  Lemma alpha_trivial : forall (t x : typ) XS,
+      t ≂ ∀ XS, x -> XS = [] /\ x = t.
+  Proof.
+    autounfold with alphadb;
+      intros t x XS (Hl & Hfa & ?); subst x; cbn in *; split.
+    - symmetry in Hl.
+      rewrite length_zero_iff_nil, uniques_nil in Hl.
+      assumption.
+    - rewrite tsub_empty; reflexivity.
+  Qed.
 End Alpha.
 
 (** Decidable alpha equivalence. *)

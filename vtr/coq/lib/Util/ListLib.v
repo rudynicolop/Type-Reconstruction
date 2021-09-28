@@ -90,6 +90,16 @@ Section Uniques.
     intro l; induction l as [| a l IHl]; simpl; auto.
   Qed.
 
+  Local Hint Resolve remove_not_in : core.
+  
+  Lemma NoDup_uniques_idem : forall l,
+      NoDup l -> uniques l = l.
+  Proof.
+    intros l Hnd;
+      induction Hnd as [| a l Hal Hl IHl];
+      simpl; f_equal; rewrite IHl; auto.
+  Qed.
+
   Local Hint Resolve uniques_sound : core.
   Local Hint Resolve uniques_complete : core.
 
@@ -343,6 +353,13 @@ Section Uniques.
       Forall P (uniques l) <-> Forall P l.
   Proof.
     intros P l; repeat rewrite Forall_forall; intuition.
+  Qed.
+
+  Lemma uniques_nil : forall l,
+      uniques l = [] <-> l = [].
+  Proof.
+    intro l; split; intros H; simpl in *; subst; auto.
+    destruct l; simpl in *; auto; try discriminate.
   Qed.
 End Uniques.
 

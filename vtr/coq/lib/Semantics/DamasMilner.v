@@ -83,12 +83,13 @@ Inductive DM (Γ : pgamma) : term -> poly -> Prop :=
     ((x, p) :: Γ) ⫢ e2 ∴ τ ->
     Γ ⫢ LetIn x e1 e2 ∴ τ
 | DM_gen e XS (τ : typ) :
+    NoDup XS ->
     Disjoint XS (FTV Γ) ->
     Γ ⫢ e ∴ τ ->
     Γ ⫢ e ∴ ∀ XS, τ
-| DM_inst e (τ : typ) XS TS :
+| DM_inst e (τ : typ) XS ts :
     Γ ⫢ e ∴ (∀ XS, τ) ->
-    Γ ⫢ e ∴ ~[ XS ⟼  TS ]~ † τ
+    Γ ⫢ e ∴ ~[ XS ⟼  ts ]~ † τ
 | DM_cond e1 e2 e3 (τ : typ) :
     Γ ⫢ e1 ∴ TBool ->
     Γ ⫢ e2 ∴ τ ->
@@ -111,14 +112,88 @@ Section DM.
   Proof.
     intros g g' e p Hg Hgep.
     generalize dependent g'.
-    induction Hgep; intros g' Hg; eauto.
-    - rewrite Hg in H; auto.
+    induction Hgep as
+        [ g x [TS t] Hsome
+        | g x e t t' He IHe
+        | g e1 e2 t t' He1 IHe1 He2 IHe2
+        | g x e1 e2 [TS t] t' He1 IHe1 He2 IHe2
+        | g e TS t Hnd Hdj He IHe
+        | g e t XS ts He IHe
+        | g e1 e2 e3 t He1 IHe1 He2 IHe2 He3 IHe3
+        | g o e1 e2 t t' Ho He1 IHe1 He2 IHe2];
+      intros g' Hg; eauto.
+    - rewrite Hg in Hsome; auto.
     - constructor; auto.
       unfold Disjoint, Intersection in *; auto.
-      intro T; specialize H with T; simpl in *;
+      intro T; specialize Hdj with T; simpl in *;
         split; intro HT; try contradiction.
-      rewrite H.
+      rewrite Hdj.
       destruct HT as [HTx HTg']; split; auto.
       pose proof eql_FTV _ _ Hg as [_ ?]; auto.
   Qed.
+
+  Local Hint Constructors NoDup : core.
+  
+  Lemma DM_normed : forall Γ e p,
+      Γ ⫢ e ∴ p -> Forall (fun '(_,p') => normed p') Γ -> normed p.
+  Proof.
+    intros g e p Hgep Hg;
+      induction Hgep as
+        [ g x [TS t] Hsome
+        | g x e t t' He IHe
+        | g e1 e2 t t' He1 IHe1 He2 IHe2
+        | g x e1 e2 [TS t] t' He1 IHe1 He2 IHe2
+        | g e TS t Hnd Hdj He IHe
+        | g e t XS ts He IHe
+        | g e1 e2 e3 t He1 IHe1 He2 IHe2 He3 IHe3
+        | g o e1 e2 t t' Ho He1 IHe1 He2 IHe2];
+      simpl in *; auto.
+    rewrite Forall_forall in Hg.
+    apply lookup_in in Hsome.
+    firstorder.
+  Qed.
+
+  Lemma alpha_DM : forall Γ e p p',
+      Forall (fun '(_,p') => normed p') Γ ->
+      p ≂ p' -> Γ ⫢ e ∴ p -> Γ ⫢ e ∴ p'.
+  Proof.
+    intros g e p p' Hg Hpp' Hgep;
+      generalize dependent p'.
+      induction Hgep as
+        [ g x [TS t] Hsome
+        | g x e t t' He IHe
+        | g e1 e2 t t' He1 IHe1 He2 IHe2
+        | g x e1 e2 [TS t] t' He1 IHe1 He2 IHe2
+        | g e TS t Hnd Hdj He IHe
+        | g e t XS ts He IHe
+        | g e1 e2 e3 t He1 IHe1 He2 IHe2 He3 IHe3
+        | g o e1 e2 t t' Ho He1 IHe1 He2 IHe2];
+        intros [VS v] Halpha;
+        try apply alpha_trivial in Halpha as [? ?];
+        subst; eauto.
+    - destruct Halpha as (Hl & Hvs & Huv); subst v.
+      apply DM_gen.
+      + (* need another assumption. *) admit.
+      + unfold Disjoint, Intersection.
+        intros X; split; simpl; try contradiction.
+        intros [Hxvs Hxftv].
+        rewrite Forall_forall in Hvs.
+        apply Hvs in Hxvs; unfold ptvars in Hxvs;
+          apply Hxvs; clear Hvs Hxvs. admit.
+      + apply DM_inst.
+        apply lookup_in in Hsome as Hlu.
+        rewrite Forall_forall in Hg.
+        apply Hg in Hlu; simpl in *.
+        rewrite NoDup_uniques_idem by assumption; auto.
+    - destruct Halpha as (Hl & Hvs & Huv); subst v.
+      apply DM_gen.
+      + admit.
+      + unfold Disjoint, Intersection in *.
+        intros T; specialize Hdj with T; clear IHe;
+          split; intros H; simpl in *; try contradiction.
+        rewrite Hdj; clear Hdj.
+        destruct H as [Htvs Htftvg]; split; auto.
+        admit.
+      + apply IHe; auto. admit.
+  Abort.
 End DM.
