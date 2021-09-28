@@ -486,6 +486,60 @@ Section Alpha.
       assumption.
     - rewrite tsub_empty; reflexivity.
   Qed.
+
+  Lemma alpha_ptvars : forall p p', p ≂ p' -> ptvars p ≡ ptvars p'.
+  Proof.
+    autounfold with alphadb; unfold "≡";
+      intros [YS y] [ZS z] (Hl & Hfa & Hyz); subst z.
+    rewrite Forall_forall in Hfa.
+    pose proof tvars_combine_to_env_equiv
+         y (uniques YS) (map TVar (uniques ZS)) as [Heqvl Heqvr].
+    destruct
+      (separate ~[uniques YS ⟼ map TVar (uniques ZS)]~ (tvars y))
+      as [ys zs] eqn:Hsep.
+    split; intros T Ht; specialize Hfa with T.
+    - pose proof difference_Difference
+           (tvars (~[uniques YS ⟼ map TVar (uniques ZS)]~ † y)) ZS as Hd;
+        unfold Difference in Hd; rewrite Hd; clear Hd. split.
+      + pose proof difference_Difference (tvars y) YS as Hd;
+          unfold Difference in Hd; rewrite Hd in Ht; clear Hd.
+        destruct Ht as [Hty Htys].
+        assert (Hnone : ~[uniques YS ⟼ map TVar (uniques ZS)]~ T = None).
+        { rewrite combine_to_env_lookup.
+          apply not_in_domain_lookup.
+          rewrite combine_map_fst, map_length, <- Hl, Nat.min_id, firstn_all.
+          intros Hu; apply uniques_sound in Hu; contradiction. }
+        apply in_fst_separate with (l := tvars y)
+          in Hnone as Hinfsep; auto.
+        rewrite Hsep in Hinfsep; simpl in Hinfsep.
+        apply Heqvr; rewrite in_app_iff; auto.
+      + intros Htzs; apply Hfa in Htzs; contradiction.
+    - pose proof difference_Difference (tvars y) YS as Hd;
+        unfold Difference in Hd; rewrite Hd; clear Hd.
+      pose proof difference_Difference
+           (tvars (~[uniques YS ⟼ map TVar (uniques ZS)]~ † y)) ZS as Hd;
+        unfold Difference in Hd; rewrite Hd in Ht; clear Hd.
+      destruct Ht as [Hty Htzs]. apply Heqvl in Hty.
+      rewrite in_app_iff in Hty. destruct Hty as [Hty | Hty].
+      + apply f_equal with (f:=fst) in Hsep as Hsepfst.
+        simpl in Hsepfst; rewrite <- Hsepfst in Hty.
+        split; eauto using in_fst_separate_in_orig. intros Htys.
+        assert (Hsome : exists z, ~[uniques YS ⟼ map TVar (uniques ZS)]~ T = Some z).
+        { rewrite combine_to_env_lookup.
+          apply in_domain_lookup.
+          rewrite combine_map_fst,map_length,<-Hl,Nat.min_id,firstn_all.
+          auto using @uniques_complete. }
+        destruct Hsome as [z Hz].
+        apply not_in_fst_separate with (l := tvars y) in Hz;
+          try contradiction;
+          eauto using in_fst_separate_in_orig.
+      + apply f_equal with (f:=snd) in Hsep as Hsepsnd;
+          simpl in *; subst zs.
+        rewrite separate_filtermap in Hty.
+        apply tsub_tvars_subset in Hty.
+        apply uniques_sound in Hty.
+        contradiction.
+  Qed.
 End Alpha.
 
 (** Decidable alpha equivalence. *)
@@ -497,7 +551,6 @@ Definition alphab '((∀ XS, x) as p : poly) '(∀ YS, y : poly) : bool :=
   typ_eq (~[uniques XS ⟼  map TVar (uniques YS)]~ † x) y.
 
 Section Alphab.
-
   Local Hint Unfold alphab : alphadb.
   
   Lemma alpha_alphab : forall px py,
