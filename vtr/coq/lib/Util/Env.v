@@ -107,6 +107,12 @@ Section Env.
   Definition mask (e : env) (ks : list K) : env :=
     fun k => if member k ks then None else e k.
 
+  Lemma mask_nil : forall e, mask e [] = e.
+  Proof.
+    intros e; unfold mask.
+    extensionality k; simpl; reflexivity.
+  Qed.
+
   Definition shadow (e1 e2 : env) : env :=
     fun k =>
       match e1 k with

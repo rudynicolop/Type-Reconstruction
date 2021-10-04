@@ -2,6 +2,18 @@ Require Export CoqRecon.Semantics.PolyTyp CoqRecon.Semantics.DeclTyping.
 
 Definition pgamma : Set := list (string * poly).
 
+Definition psub (s : tenv) '(∀ TS, t : poly) : poly :=
+  ∀ TS, (mask s TS) † t.
+
+Notation "s ◁ p"
+  := (psub s p) (at level 20, right associativity) : poly_scope.
+
+Definition pgsub (s : tenv) (g : pgamma) : pgamma :=
+  map (fun '(x,p) => (x,psub s p)) g.
+
+Notation "s ◀ g"
+  := (pgsub s g) (at level 25, right associativity).
+
 Definition ftv : pgamma -> list nat :=
   fold_right (fun '(x,p) => app (ptvars p)) [].
 
@@ -68,6 +80,10 @@ Open Scope term_scope.
 
 (** Damas Milner Declarative-typing system. *)
 Inductive DM (Γ : pgamma) : term -> poly -> Prop :=
+| DM_bool (b : bool) :
+    Γ ⫢ b ∴ TBool
+| DM_nat (n : nat) :
+    Γ ⫢ n ∴ TNat
 | DM_var x p :
     lookup x Γ = Some p ->
     Γ ⫢ x ∴ p
@@ -113,7 +129,9 @@ Section DM.
     intros g g' e p Hg Hgep.
     generalize dependent g'.
     induction Hgep as
-        [ g x [TS t] Hsome
+        [ g b
+        | g n
+        | g x [TS t] Hsome
         | g x e t t' He IHe
         | g e1 e2 t t' He1 IHe1 He2 IHe2
         | g x e1 e2 [TS t] t' He1 IHe1 He2 IHe2
@@ -139,7 +157,9 @@ Section DM.
   Proof.
     intros g e p Hgep Hg;
       induction Hgep as
-        [ g x [TS t] Hsome
+        [ g b
+        | g n
+        | g x [TS t] Hsome
         | g x e t t' He IHe
         | g e1 e2 t t' He1 IHe1 He2 IHe2
         | g x e1 e2 [TS t] t' He1 IHe1 He2 IHe2
@@ -170,4 +190,54 @@ Section DM.
     rewrite NoDup_uniques_idem by assumption.
     assumption.
   Qed.
+
+  Hint Rewrite @mask_nil : core.
+  Local Hint Resolve pres_op_typs : core.
+  
+  Lemma DM_pres_sub : forall Γ e p,
+      Γ ⫢ e ∴ p ->
+      forall σ, σ ◀ Γ ⫢ e ∴ σ ◁ p.
+  Proof.
+    intros g e p H;
+      induction H as
+        [ g b
+        | g n
+        | g x [TS t] Hsome
+        | g x e t t' He IHe
+        | g e1 e2 t t' He1 IHe1 He2 IHe2
+        | g x e1 e2 [TS t] t' He1 IHe1 He2 IHe2
+        | g e TS t Hnd Hdj He IHe
+        | g e t XS ts He IHe
+        | g e1 e2 e3 t He1 IHe1 He2 IHe2 He3 IHe3
+        | g o e1 e2 t t' Ho He1 IHe1 He2 IHe2];
+      intro s; simpl in *; autorewrite with core in *; auto.
+    - apply DM_var; unfold "◀".
+      rewrite lookup_map_snd; maybe_simpl.
+      rewrite Hsome; reflexivity.
+    - specialize IHe with s; simpl in *;
+        autorewrite with core in *; auto.
+    - specialize IHe1 with s; simpl in *;
+        specialize IHe2 with s;
+        autorewrite with core in *; eauto.
+    - specialize IHe1 with s; specialize IHe2 with s;
+        autorewrite with core in *; eauto.
+    - specialize IHe with s;
+        autorewrite with core in *.
+      (* Need to choose an alpha equivalent type
+         to [∀ TS, mask s TS † t] with some [WS]
+         such that [NoDup WS] [Disjoint WS (FTV (s ◀ g))]. *)
+      admit.
+    - (* Need lemma to show:
+         [s † ~[XS ⟼  ts]~ † t = ~[XS ⟼  map (tsub s) ts]~ † s † t].
+         I'm not sure what assumptions are
+         necessary to prove this equation holds. *)
+      admit.
+    - specialize IHe1 with s;
+        specialize IHe2 with s;
+        specialize IHe3 with s;
+        autorewrite with core in *; auto.
+    - specialize IHe1 with s;
+        specialize IHe2 with s;
+        autorewrite with core in *; eauto.
+  Abort.
 End DM.

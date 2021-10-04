@@ -8,32 +8,11 @@ Definition Instantiates
   length (uniques TS) = length (uniques WS) /\
   Forall (fun W => W ∉ ptvars p) WS (*/\ Disjoint WS (FTV g)*).
 
-Definition psub (s : tenv) '(∀ TS, t : poly) : poly :=
-  ∀ TS, (mask s TS) † t.
-
-Notation "s ◁ p"
-  := (psub s p) (at level 20, right associativity) : poly_scope.
-
-Definition pgsub (s : tenv) (g : pgamma) : pgamma :=
-  map (fun '(x,p) => (x,psub s p)) g.
-
-Notation "s ◀ g"
-  := (pgsub s g) (at level 25, right associativity).
-
 Definition captures (g : pgamma) (t : typ) : list nat :=
   filter (fun T => negb (member T (FTV g))) (uniques (tvars t)).
 
 Definition Generalize (s : tenv) (g : pgamma) (t : typ) : list nat :=
   captures (s ◀ g) t.
-
-(*
-Definition Generalizes
-           (g : pgamma) (t : typ)
-           (C : list (typ * typ))
-           (s : tenv) (TS : list nat) : Prop :=
-  Unify C s /\
-  Forall (fun T => T ∈ tvars (s † t)) TS /\
-  Forall (fun T => T ∉ FTV (s ◀ g)) TS. *)
 
 (** Based on [Types and Programming Languages],
     as well as the Cornell CS 3110 textbook
@@ -80,7 +59,8 @@ Inductive DM_constraint (Γ : pgamma)
     χ1 ∩ χ2 = [] ->
     Unify C1 σ ->
     Γ ⫦ e1 ∴ τ1 ⊣ χ1 ≀ C1 ->
-    (x, ∀ (Generalize σ Γ (σ † τ1)), σ † τ1) :: σ ◀ Γ ⫦ e2 ∴ τ2 ⊣ χ2 ≀ C2 ->
+    (x, ∀ (Generalize σ Γ (σ † τ1)), σ † τ1)
+      :: σ ◀ Γ ⫦ e2 ∴ τ2 ⊣ χ2 ≀ C2 ->
     Γ ⫦ LetIn x e1 e2 ∴ τ2 ⊣ χ1 ∪ χ2 ≀ C1 ∪ C2
 where "g ⫦ e ∴ t ⊣ X ≀ C" := (DM_constraint g e t X C) : type_scope.
 

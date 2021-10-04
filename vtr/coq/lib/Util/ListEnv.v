@@ -427,7 +427,7 @@ Section Env.
     - exists [], ((ky,vy) :: l); simpl; dispatch_eqdec; auto.
     - apply IHl in Hin as (l1 & l2 & Hl & Hsome); subst.
       exists ((k,v) :: l1), l2; auto.
-  Qed.      
+  Qed.
 End Env.
 
 Section NoDup.
@@ -627,3 +627,16 @@ Section NoDup.
     intuition.
   Qed.
 End NoDup.
+
+Section MapSnd.
+  Context {K U V : Set} {HEDK : EqDec K eq}.
+  Variable (f : U -> V).
+
+  Lemma lookup_map_snd : forall l (k : K),
+      lookup k (map (fun '(k,u) => (k,f u)) l) = lookup k l >>| f.
+  Proof.
+    intro l; induction l as [| [hk u] l IHl];
+      intro k; simpl; auto.
+    dispatch_eqdec; maybe_simpl; eauto.
+  Qed.
+End MapSnd.
